@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../core/constants/app_colors.dart';
+import '../core/utils/responsive_utils.dart';
 
 class CustomBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -15,16 +16,16 @@ class CustomBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: EdgeInsets.fromLTRB(context.wp(5), 0, context.wp(5), context.hp(2.5)),
+      padding: EdgeInsets.symmetric(horizontal: context.wp(4), vertical: context.hp(1.5)),
       decoration: BoxDecoration(
         color: AppColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(context.wp(8)), // ~30px
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            blurRadius: context.wp(5), // ~20px
+            offset: Offset(0, context.hp(1.2)),
           ),
         ],
       ),
@@ -83,17 +84,17 @@ class _NavItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: context.wp(3), vertical: context.hp(1)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 4),
+            Icon(icon, color: color, size: context.sp(24)),
+            SizedBox(height: context.hp(0.5)),
             Text(
               label,
               style: TextStyle(
                 color: color,
-                fontSize: 10,
+                fontSize: context.sp(10),
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
               ),
             ),
