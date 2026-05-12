@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'dart:ui';
 import '../data/models/status_model.dart';
 import '../core/utils/responsive_utils.dart';
 import '../core/constants/app_colors.dart';
@@ -12,22 +13,22 @@ class StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: EdgeInsets.only(bottom: context.hp(2.5)), 
+      margin: EdgeInsets.only(bottom: context.hp(3)), 
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(context.wp(5)),
+        borderRadius: BorderRadius.circular(context.wp(6)),
         color: Colors.grey.shade200,
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryGradientStart.withOpacity(0.15),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(context.wp(5)),
+        borderRadius: BorderRadius.circular(context.wp(6)),
         child: AspectRatio(
-          aspectRatio: 1, // Square card for a balanced ListView appearance
+          aspectRatio: 1, 
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -43,10 +44,11 @@ class StatusCard extends StatelessWidget {
                       end: Alignment.bottomCenter,
                       colors: [
                         Colors.transparent,
-                        Colors.black.withOpacity(0.2),
-                        Colors.black.withOpacity(0.85),
+                        Colors.black.withOpacity(0.0),
+                        Colors.black.withOpacity(0.7),
+                        Colors.black.withOpacity(0.9),
                       ],
-                      stops: const [0.4, 0.75, 1.0],
+                      stops: const [0.4, 0.6, 0.85, 1.0],
                     ),
                   ),
                 ),
@@ -54,7 +56,7 @@ class StatusCard extends StatelessWidget {
               Positioned(
                 left: context.wp(4),
                 right: context.wp(4),
-                bottom: context.hp(2),
+                bottom: context.hp(2.5),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -65,38 +67,59 @@ class StatusCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: context.sp(14),
-                        fontWeight: FontWeight.w600,
+                        fontSize: context.sp(16),
+                        fontWeight: FontWeight.w700,
                         height: 1.3,
+                        letterSpacing: 0.3,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.4),
+                            offset: const Offset(0, 2),
+                            blurRadius: 4,
+                          ),
+                        ],
                       ),
                     ),
-                    SizedBox(height: context.hp(1.5)),
-                    Row(
-                      children: [
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: context.wp(3), vertical: context.hp(0.8)),
+                    SizedBox(height: context.hp(2)),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(context.wp(4)),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(horizontal: context.wp(5), vertical: context.hp(1.5)),
                           decoration: BoxDecoration(
-                            gradient: AppColors.primaryGradient,
+                            color: Colors.white.withOpacity(0.15),
                             borderRadius: BorderRadius.circular(context.wp(4)),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.2),
+                              width: 1,
+                            ),
                           ),
                           child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Icon(CupertinoIcons.heart_fill, color: Colors.white, size: context.sp(14)),
-                              SizedBox(width: context.wp(1.5)),
-                              Text('1.2k', style: TextStyle(color: Colors.white, fontSize: context.sp(11), fontWeight: FontWeight.bold)),
+                              _buildActionButton(
+                                context,
+                                icon: CupertinoIcons.heart_fill,
+                                label: '1.2k',
+                                color: Colors.redAccent,
+                              ),
+                              _buildActionButton(
+                                context,
+                                icon: CupertinoIcons.cloud_download,
+                                label: 'Save',
+                                color: Colors.white,
+                              ),
+                              _buildActionButton(
+                                context,
+                                icon: CupertinoIcons.paperplane,
+                                label: 'Share',
+                                color: Colors.white,
+                              ),
                             ],
                           ),
                         ),
-                        SizedBox(width: context.wp(2)),
-                        Container(
-                          padding: EdgeInsets.all(context.wp(2)),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(CupertinoIcons.share, color: Colors.white, size: context.sp(14)),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
@@ -105,6 +128,25 @@ class StatusCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildActionButton(BuildContext context, {required IconData icon, required String label, required Color color}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: context.sp(18)),
+        SizedBox(width: context.wp(1.5)),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: context.sp(13),
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
     );
   }
 }
