@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
-import 'views/main_layout.dart';
+import 'views/home/home_screen.dart';
 import 'viewmodels/home_viewmodel.dart';
 
 void main() {
@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
         title: 'Status Maker',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        home: const MainLayout(),
+        home: const HomeScreen(),
       ),
     );
   }
