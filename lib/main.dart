@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
-import 'views/home/home_screen.dart';
-import 'viewmodels/home_viewmodel.dart';
+import 'package:status_maker/features/onboarding/presentation/onboarding_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -13,16 +11,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => HomeViewModel()),
-      ],
-      child: MaterialApp(
-        title: 'Status Maker',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        home: const HomeScreen(),
-      ),
+    return MaterialApp(
+      title: 'Status Maker',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      home: const OnboardingScreen(),
     );
   }
 }

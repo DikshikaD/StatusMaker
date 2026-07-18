@@ -1,34 +1,53 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../constants/app_colors.dart';
+import 'app_colors.dart';
+import 'app_typography.dart';
 
 class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
-      scaffoldBackgroundColor: AppColors.backgroundLight,
-      primaryColor: AppColors.primaryGradientStart,
-      fontFamily: GoogleFonts.inter().fontFamily,
-      textTheme: GoogleFonts.interTextTheme().copyWith(
-        headlineMedium: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: AppColors.textPrimary,
-        ),
-        bodyLarge: const TextStyle(
-          color: AppColors.textPrimary,
-        ),
-        bodyMedium: const TextStyle(
-          color: AppColors.textSecondary,
-        ),
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: AppColors.primary,
+        primary: AppColors.primary,
+        secondary: AppColors.accent,
+        surface: AppColors.background,
       ),
+      scaffoldBackgroundColor: AppColors.background,
+      textTheme: AppTypography.textTheme,
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.background,
         elevation: 0,
         centerTitle: true,
-        iconTheme: IconThemeData(color: AppColors.iconActive),
-        systemOverlayStyle: SystemUiOverlayStyle.dark, // Makes status bar icons dark
+        iconTheme: IconThemeData(color: AppColors.textPrimary),
       ),
-      useMaterial3: true,
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          side: const BorderSide(color: AppColors.border),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        ),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: AppColors.surface,
+        selectedItemColor: AppColors.primary,
+        unselectedItemColor: AppColors.textSecondary,
+        type: BottomNavigationBarType.fixed,
+        elevation: 8,
+      ),
     );
   }
 }
