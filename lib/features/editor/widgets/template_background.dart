@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
+import 'package:status_maker/features/editor/data/template_motif.dart';
+import 'package:status_maker/features/editor/widgets/motif_painter.dart';
 
 /// Renders the status background: a gallery image, a built-in gradient, or a
 /// built-in solid colour. Isolated in a RepaintBoundary so foreground edits
@@ -14,7 +16,14 @@ class TemplateBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget bg;
-    if (state.isImage) {
+    if (state.isAsset) {
+      bg = Image.asset(
+        state.assetPath!,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0F172A)),
+      );
+    } else if (state.isImage) {
       bg = Image.file(
         File(state.imagePath!),
         fit: BoxFit.cover,
@@ -39,7 +48,23 @@ class TemplateBackground extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: SizedBox.expand(child: bg),
+        child: SizedBox.expand(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              bg,
+              if (state.motif != TemplateMotif.none)
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: MotifPainter(
+                      state.motif,
+                      state.motifColor ?? Colors.white,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

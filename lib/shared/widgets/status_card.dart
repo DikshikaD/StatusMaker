@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
+import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/utils/responsive.dart';
 
 class StatusCard extends StatefulWidget {
   final String title;
@@ -34,8 +36,8 @@ class _StatusCardState extends State<StatusCard> {
   void _showOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
       ),
       builder: (sheetContext) {
         void act(String message) {
@@ -49,30 +51,30 @@ class _StatusCardState extends State<StatusCard> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(height: 8),
+              SizedBox(height: 8.h),
               Container(
-                width: 40,
-                height: 4,
+                width: 40.w,
+                height: 4.h,
                 decoration: BoxDecoration(
                   color: AppColors.border,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(2.r),
                 ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8.h),
               ListTile(
                 leading: const Icon(Icons.favorite_border),
-                title: const Text('Add to Favorites'),
-                onTap: () => act('Added to Favorites'),
+                title: Text(S.t('add_favorites')),
+                onTap: () => act(S.t('added_favorites')),
               ),
               ListTile(
                 leading: const Icon(Icons.share_outlined),
-                title: const Text('Share'),
-                onTap: () => act('Sharing…'),
+                title: Text(S.t('share')),
+                onTap: () => act(S.t('sharing')),
               ),
               ListTile(
                 leading: const Icon(Icons.visibility_off_outlined),
-                title: const Text('Not interested'),
-                onTap: () => act('We\'ll show fewer like this'),
+                title: Text(S.t('not_interested')),
+                onTap: () => act(S.t('fewer_like_this')),
               ),
             ],
           ),
@@ -99,8 +101,8 @@ class _StatusCardState extends State<StatusCard> {
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
+                blurRadius: 15.r,
+                offset: Offset(0, 8.h),
               ),
             ],
           ),
@@ -111,20 +113,20 @@ class _StatusCardState extends State<StatusCard> {
               Stack(
                 children: [
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(AppDimensions.radiusLarge)),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimensions.radiusLarge)),
                     child: Image.network(
                       widget.imageUrl,
-                      height: 320,
+                      height: 320.h,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(height: 320, color: AppColors.cardLight),
+                      errorBuilder: (_, __, ___) => Container(height: 320.h, color: AppColors.cardLight),
                     ),
                   ),
                   // Gradient overlay
                   Positioned.fill(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppDimensions.radiusLarge)),
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimensions.radiusLarge)),
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
@@ -141,16 +143,16 @@ class _StatusCardState extends State<StatusCard> {
                     top: AppDimensions.paddingMedium,
                     left: AppDimensions.paddingMedium,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
                       decoration: BoxDecoration(
                         color: widget.isHighlight ? AppColors.accent : Colors.black.withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(20.r),
                       ),
                       child: Text(
                         widget.tag,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: Colors.white,
-                          fontSize: 12,
+                          fontSize: 12.sp,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -174,7 +176,7 @@ class _StatusCardState extends State<StatusCard> {
                       widget.title,
                       style: Theme.of(context).textTheme.displayMedium?.copyWith(
                             color: Colors.white,
-                            fontSize: 24,
+                            fontSize: 24.sp,
                             height: 1.3,
                           ),
                       maxLines: 4,
@@ -186,22 +188,22 @@ class _StatusCardState extends State<StatusCard> {
               
               // Action Bar
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium, vertical: 12),
+                padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium, vertical: 12.h),
                 child: Row(
                   children: [
                     Column(
                       children: [
-                        const Icon(Icons.favorite_border, size: 20, color: AppColors.textSecondary),
-                        const SizedBox(height: 2),
-                        Text(widget.likes, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w500)),
+                        Icon(Icons.favorite_border, size: 20.w, color: AppColors.textSecondary),
+                        SizedBox(height: 2.h),
+                        Text(widget.likes, style: TextStyle(color: AppColors.textSecondary, fontSize: 10.sp, fontWeight: FontWeight.w500)),
                       ],
                     ),
-                    const SizedBox(width: 16),
+                    SizedBox(width: 16.w),
                     Column(
                       children: [
-                        const Icon(Icons.share_outlined, size: 20, color: AppColors.textSecondary),
-                        const SizedBox(height: 2),
-                        Text(widget.shares, style: const TextStyle(color: AppColors.textSecondary, fontSize: 10, fontWeight: FontWeight.w500)),
+                        Icon(Icons.share_outlined, size: 20.w, color: AppColors.textSecondary),
+                        SizedBox(height: 2.h),
+                        Text(widget.shares, style: TextStyle(color: AppColors.textSecondary, fontSize: 10.sp, fontWeight: FontWeight.w500)),
                       ],
                     ),
                     const Spacer(),
@@ -214,25 +216,25 @@ class _StatusCardState extends State<StatusCard> {
                           backgroundColor: AppColors.accent.withValues(alpha: 0.15),
                           foregroundColor: AppColors.accent,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                          minimumSize: const Size(0, 40),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 0),
+                          minimumSize: Size(0, 40.h),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
                         ),
-                        child: const Text('One-Tap Create', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                        child: Text(S.t('one_tap_create'), style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700)),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8.w),
                     ],
                     ElevatedButton.icon(
                       onPressed: widget.onCustomize ?? () {},
-                      icon: const Icon(Icons.edit, size: 14),
-                      label: const Text('Customize', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      icon: Icon(Icons.edit, size: 14.w),
+                      label: Text(S.t('customize'), style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-                        minimumSize: const Size(0, 40),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 0),
+                        minimumSize: Size(0, 40.h),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
                       ),
                     ),
                   ],

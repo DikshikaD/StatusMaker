@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
+import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/features/category/presentation/category_screen.dart';
 import 'package:status_maker/features/preview/presentation/status_preview_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
+import 'package:status_maker/core/utils/responsive.dart';
 
 class ExploreScreen extends StatelessWidget {
   const ExploreScreen({super.key});
@@ -13,16 +15,16 @@ class ExploreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Search Discovery'),
+        title: Text(S.t('explore_title')),
         centerTitle: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('More options coming soon'),
-                  duration: Duration(seconds: 2),
+                SnackBar(
+                  content: Text(S.t('more_soon')),
+                  duration: const Duration(seconds: 2),
                 ),
               );
             },
@@ -31,16 +33,16 @@ class ExploreScreen extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(AppDimensions.paddingMedium),
+        padding: EdgeInsets.all(AppDimensions.paddingMedium),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildSearchBar(),
-            const SizedBox(height: AppDimensions.paddingLarge),
+            SizedBox(height: AppDimensions.paddingLarge),
             _buildTrendingSearches(context),
-            const SizedBox(height: AppDimensions.paddingLarge),
+            SizedBox(height: AppDimensions.paddingLarge),
             _buildDiscoverMore(context),
-            const SizedBox(height: 80), // Padding for FAB
+            SizedBox(height: 80.h), // Padding for FAB
           ],
         ),
       ),
@@ -56,7 +58,7 @@ class ExploreScreen extends StatelessWidget {
         backgroundColor: AppColors.accent,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(30.r),
         ),
         elevation: 4,
         child: const Icon(Icons.add),
@@ -68,27 +70,27 @@ class ExploreScreen extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(30.r),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            blurRadius: 10.r,
+            offset: Offset(0, 4.h),
           ),
         ],
       ),
       child: TextField(
         decoration: InputDecoration(
-          hintText: 'Search templates...',
-          hintStyle: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          hintText: S.t('search_hint'),
+          hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14.sp),
           prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(30.r),
             borderSide: BorderSide.none,
           ),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
+          contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 20.w),
         ),
       ),
     );
@@ -101,15 +103,15 @@ class ExploreScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Trending Searches',
+          S.t('trending_searches'),
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontSize: 16,
+            fontSize: 16.sp,
           ),
         ),
-        const SizedBox(height: AppDimensions.paddingMedium),
+        SizedBox(height: AppDimensions.paddingMedium),
         Wrap(
-          spacing: 8,
-          runSpacing: 12,
+          spacing: 8.w,
+          runSpacing: 12.h,
           children: searches.map((search) {
             final isSelected = search == 'Birthday';
             return GestureDetector(
@@ -120,10 +122,10 @@ class ExploreScreen extends StatelessWidget {
                 );
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.accent.withValues(alpha: 0.15) : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(20.r),
                   border: Border.all(
                     color: isSelected ? AppColors.accent.withValues(alpha: 0.3) : AppColors.border,
                   ),
@@ -132,7 +134,7 @@ class ExploreScreen extends StatelessWidget {
                   search,
                   style: TextStyle(
                     color: isSelected ? AppColors.accent : AppColors.textPrimary,
-                    fontSize: 13,
+                    fontSize: 13.sp,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   ),
                 ),
@@ -151,28 +153,28 @@ class ExploreScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Discover More',
+              S.t('discover_more'),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontSize: 16,
+                fontSize: 16.sp,
               ),
             ),
             TextButton(
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Filters coming soon'),
-                    duration: Duration(seconds: 2),
+                  SnackBar(
+                    content: Text(S.t('filters_soon')),
+                    duration: const Duration(seconds: 2),
                   ),
                 );
               },
-              child: const Text(
-                'Filter',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              child: Text(
+                S.t('filter'),
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 13.sp),
               ),
             ),
           ],
         ),
-        const SizedBox(height: AppDimensions.paddingMedium),
+        SizedBox(height: AppDimensions.paddingMedium),
         // Staggered grid look using Row and Columns
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,19 +182,19 @@ class ExploreScreen extends StatelessWidget {
             Expanded(
               child: Column(
                 children: [
-                  _buildDiscoveryCard(context, 'Serene Awakening', 'Morning', 'https://images.unsplash.com/photo-1506744626753-eda8151a74a4?q=80&w=2000&auto=format&fit=crop', 240),
-                  const SizedBox(height: 12),
-                  _buildDiscoveryCard(context, 'Birthday Bash', 'Celebration', 'https://images.unsplash.com/photo-1530103862676-de8892ebe814?q=80&w=2000&auto=format&fit=crop', 160),
+                  _buildDiscoveryCard(context, 'Serene Awakening', 'Morning', 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2070&auto=format&fit=crop', 240.h),
+                  SizedBox(height: 12.h),
+                  _buildDiscoveryCard(context, 'Birthday Bash', 'Celebration', 'https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop', 160.h),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12.w),
             Expanded(
               child: Column(
                 children: [
-                  _buildDiscoveryCard(context, 'Morning Serenity', 'Nature', 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?q=80&w=2000&auto=format&fit=crop', 160),
-                  const SizedBox(height: 12),
-                  _buildDiscoveryCard(context, 'Our Anniversary', 'Love', 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=2000&auto=format&fit=crop', 240),
+                  _buildDiscoveryCard(context, 'Morning Serenity', 'Nature', 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?q=80&w=2000&auto=format&fit=crop', 160.h),
+                  SizedBox(height: 12.h),
+                  _buildDiscoveryCard(context, 'Our Anniversary', 'Love', 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=2000&auto=format&fit=crop', 240.h),
                 ],
               ),
             ),
@@ -243,7 +245,7 @@ class ExploreScreen extends StatelessWidget {
                 ],
               ),
             ),
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all(12.w),
             alignment: Alignment.bottomLeft,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -251,18 +253,18 @@ class ExploreScreen extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 14,
+                    fontSize: 14.sp,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2.h),
                 Text(
                   subtitle,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 11,
+                    fontSize: 11.sp,
                   ),
                 ),
               ],

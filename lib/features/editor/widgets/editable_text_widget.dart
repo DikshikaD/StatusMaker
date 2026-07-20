@@ -34,8 +34,14 @@ class EditableTextWidget extends StatelessWidget {
       onTransformEnd: onTransformEnd,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 300),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: textObject.highlight != null
+              ? BoxDecoration(
+                  color: textObject.highlight,
+                  borderRadius: BorderRadius.circular(8),
+                )
+              : null,
           child: Text(
             textObject.text.isEmpty ? ' ' : textObject.text,
             textAlign: textObject.textAlign,

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:status_maker/core/constants/app_assets.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
+import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
+import 'package:status_maker/core/utils/responsive.dart';
 
 /// Built-in backgrounds — solid colours and gradients. No assets needed.
 const List<BackgroundState> kBackgroundPresets = [
@@ -23,6 +26,20 @@ const List<BackgroundState> kBackgroundPresets = [
 
 /// Applied by the "None" tile to clear any picked image back to a plain colour.
 const BackgroundState kNoBackground = BackgroundState(color: Color(0xFF0F172A));
+
+/// Image background categories, each with its bundled asset paths.
+class BackgroundCategory {
+  final String labelKey;
+  final List<String> assets;
+  const BackgroundCategory(this.labelKey, this.assets);
+}
+
+const List<BackgroundCategory> kBackgroundCategories = [
+  BackgroundCategory('morning', AppAssets.morningBackgrounds),
+  BackgroundCategory('festival', AppAssets.festivalBackgrounds),
+  BackgroundCategory('love', AppAssets.loveBackgrounds),
+  BackgroundCategory('birthday', AppAssets.birthdayBackgrounds),
+];
 
 class BackgroundSheet extends StatefulWidget {
   final ValueChanged<BackgroundState> onSelect;
@@ -47,10 +64,10 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
 
     return Container(
       constraints: BoxConstraints(maxHeight: maxH),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-      decoration: const BoxDecoration(
-        color: AppColors.darkSurface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      padding: EdgeInsets.fromLTRB(16.w, 12.h, 16.w, 20.h),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       child: SafeArea(
         top: false,
@@ -58,16 +75,16 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 40,
-              height: 4,
+              width: 40.w,
+              height: 4.h,
               decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
+                color: AppColors.border,
+                borderRadius: BorderRadius.circular(2.r),
               ),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16.h),
             _segment(),
-            const SizedBox(height: 16),
+            SizedBox(height: 16.h),
             // Scrollable so the grid never overflows / overlaps.
             Flexible(
               child: SingleChildScrollView(
@@ -87,16 +104,16 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
         child: GestureDetector(
           onTap: () => setState(() => _tab = index),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            padding: EdgeInsets.symmetric(vertical: 10.h),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: selected ? AppColors.accent : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(12.r),
             ),
             child: Text(
               label,
               style: TextStyle(
-                color: selected ? Colors.white : AppColors.darkTextSecondary,
+                color: selected ? Colors.white : AppColors.textSecondary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -106,51 +123,105 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
     }
 
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: EdgeInsets.all(4.w),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
+        color: AppColors.cardLight,
+        borderRadius: BorderRadius.circular(14.r),
       ),
-      child: Row(children: [tab('Presets', 0), tab('Gallery', 1)]),
+      child: Row(children: [tab(S.t('presets'), 0), tab(S.t('gallery'), 1)]),
     );
   }
 
   Widget _presetsGrid() {
-    return GridView.builder(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Solid colours & gradients (the currently available presets).
+        _sectionHeader(S.t('colors')),
+        _grid([
+          _noneTile(),
+          for (final bg in kBackgroundPresets) _colorTile(bg),
+        ]),
+        // Image categories: Morning, Festival, Love.
+        for (final cat in kBackgroundCategories) ...[
+          SizedBox(height: 20.h),
+          _sectionHeader(S.t(cat.labelKey)),
+          _grid([for (final path in cat.assets) _assetTile(path)]),
+        ],
+      ],
+    );
+  }
+
+  Widget _sectionHeader(String title) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 12.h),
+      child: Text(
+        title,
+        style: TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 15.sp,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _grid(List<Widget> children) {
+    return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      // +1 for the leading "None" tile.
-      itemCount: kBackgroundPresets.length + 1,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.72,
-      ),
-      itemBuilder: (_, i) {
-        if (i == 0) return _noneTile();
-        final bg = kBackgroundPresets[i - 1];
-        return GestureDetector(
-          onTap: () {
-            widget.onSelect(bg);
-            Navigator.of(context).pop();
-          },
-          child: Container(
-            decoration: BoxDecoration(
-              color: bg.color,
-              gradient: bg.isGradient
-                  ? LinearGradient(
-                      colors: bg.gradientColors!,
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : null,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white12),
-            ),
-          ),
-        );
+      crossAxisCount: 4,
+      mainAxisSpacing: 12.h,
+      crossAxisSpacing: 12.w,
+      childAspectRatio: 0.72,
+      children: children,
+    );
+  }
+
+  Widget _colorTile(BackgroundState bg) {
+    return GestureDetector(
+      onTap: () {
+        widget.onSelect(bg);
+        Navigator.of(context).pop();
       },
+      child: Container(
+        decoration: BoxDecoration(
+          color: bg.color,
+          gradient: bg.isGradient
+              ? LinearGradient(
+                  colors: bg.gradientColors!,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+          borderRadius: BorderRadius.circular(14.r),
+          border: Border.all(color: AppColors.border),
+        ),
+      ),
+    );
+  }
+
+  Widget _assetTile(String path) {
+    return GestureDetector(
+      onTap: () {
+        widget.onSelect(BackgroundState(assetPath: path));
+        Navigator.of(context).pop();
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14.r),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14.r),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Image.asset(
+            path,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) =>
+                ColoredBox(color: AppColors.cardLight),
+          ),
+        ),
+      ),
     );
   }
 
@@ -163,17 +234,19 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white24),
+          color: AppColors.cardLight,
+          borderRadius: BorderRadius.circular(14.r),
+          border: Border.all(color: AppColors.border),
         ),
-        child: const Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.hide_image_outlined, color: Colors.white70, size: 22),
-            SizedBox(height: 4),
-            Text('None',
-                style: TextStyle(color: Colors.white70, fontSize: 11)),
+            Icon(Icons.hide_image_outlined,
+                color: AppColors.textSecondary, size: 22.w),
+            SizedBox(height: 4.h),
+            Text(S.t('none'),
+                style: TextStyle(
+                    color: AppColors.textSecondary, fontSize: 11.sp)),
           ],
         ),
       ),
@@ -182,26 +255,27 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
 
   Widget _galleryTab() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: EdgeInsets.symmetric(vertical: 12.h),
       child: GestureDetector(
         onTap: widget.onPickGallery,
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 22),
+          padding: EdgeInsets.symmetric(vertical: 22.h),
           decoration: BoxDecoration(
             color: AppColors.accent,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(16.r),
           ),
-          child: const Column(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.photo_library_outlined, color: Colors.white, size: 30),
-              SizedBox(height: 8),
+              Icon(Icons.photo_library_outlined,
+                  color: Colors.white, size: 30.w),
+              SizedBox(height: 8.h),
               Text(
-                'Choose from Gallery',
+                S.t('choose_gallery'),
                 style: TextStyle(
                     color: Colors.white,
-                    fontSize: 16,
+                    fontSize: 16.sp,
                     fontWeight: FontWeight.w700),
               ),
             ],

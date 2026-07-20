@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:status_maker/core/utils/responsive.dart';
 import 'app_colors.dart';
 import 'app_typography.dart';
 
@@ -25,10 +26,10 @@ class AppTheme {
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(30.r),
           ),
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -36,9 +37,9 @@ class AppTheme {
           foregroundColor: AppColors.primary,
           side: const BorderSide(color: AppColors.border),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(30.r),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
         ),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(

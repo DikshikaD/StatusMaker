@@ -10,6 +10,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
 
   cupertino_icons: ^1.0.8
 
@@ -28,6 +30,9 @@ dependencies:
   path_provider: ^2.1.0
   share_plus: ^10.0.0
 
+  # Persist user preferences (e.g. language)
+  shared_preferences: ^2.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -38,3 +43,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/categories/morning/
+    - assets/categories/love/
+    - assets/categories/festival/
+    - assets/categories/birthday/

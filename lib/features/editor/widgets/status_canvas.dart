@@ -3,7 +3,9 @@ import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 import 'package:status_maker/features/editor/widgets/template_background.dart';
 import 'package:status_maker/features/editor/widgets/editable_image_widget.dart';
+import 'package:status_maker/features/editor/widgets/editable_element_widget.dart';
 import 'package:status_maker/features/editor/widgets/editable_text_widget.dart';
+import 'package:status_maker/features/editor/widgets/frame_painter.dart';
 
 /// The editing surface. Wrapped in a RepaintBoundary ([repaintKey]) so Save /
 /// Share can capture exactly what's on the status — nothing else.
@@ -27,7 +29,34 @@ class _StatusCanvasState extends State<StatusCanvas> {
   final FocusNode _focusNode = FocusNode();
 
   @override
+  void initState() {
+    super.initState();
+    widget.controller.editRequest.addListener(_onEditRequest);
+  }
+
+  /// Opens the inline editor when the controller asks (e.g. right after the
+  /// user taps "Text" and we want the keyboard to appear immediately).
+  void _onEditRequest() {
+    final id = widget.controller.editRequest.value;
+    if (id == null) return;
+    widget.controller.clearEditRequest();
+    TextObject? target;
+    for (final t in widget.controller.texts) {
+      if (t.id == id) {
+        target = t;
+        break;
+      }
+    }
+    if (target == null) return;
+    final t = target;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startEditing(t);
+    });
+  }
+
+  @override
   void dispose() {
+    widget.controller.editRequest.removeListener(_onEditRequest);
     _editController.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -71,6 +100,28 @@ class _StatusCanvasState extends State<StatusCanvas> {
                 c.clearSelection();
               },
             ),
+
+            // Vector elements (stickers)
+            ...c.elements.map((el) {
+              return ValueListenableBuilder<String?>(
+                key: ValueKey('el_${el.id}'),
+                valueListenable: c.selectedId,
+                builder: (context, sel, _) {
+                  return EditableElementWidget(
+                    element: el,
+                    isSelected: sel == el.id,
+                    onSelect: () => c.select(el.id),
+                    onDelete: () => c.deleteElement(el.id),
+                    onTransformEnd: (p, s, r) => c.updateElementTransform(
+                      el.id,
+                      position: p,
+                      scale: s,
+                      rotation: r,
+                    ),
+                  );
+                },
+              );
+            }),
 
             // Floating images
             ...c.images.map((img) {
@@ -117,6 +168,20 @@ class _StatusCanvasState extends State<StatusCanvas> {
                 },
               );
             }),
+
+            // Full-status decorative frame — always on top, never interactive.
+            if (c.frame != StatusFrame.none)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CustomPaint(
+                    painter: FramePainter(
+                      frame: c.frame,
+                      color: c.frameColor,
+                      width: c.frameWidth,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -137,8 +202,14 @@ class _StatusCanvasState extends State<StatusCanvas> {
             child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 300),
             child: IntrinsicWidth(
-              child: Padding(
-                padding: const EdgeInsets.all(8),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: t.highlight != null
+                    ? BoxDecoration(
+                        color: t.highlight,
+                        borderRadius: BorderRadius.circular(8),
+                      )
+                    : null,
                 child: TextField(
                   controller: _editController,
                   focusNode: _focusNode,

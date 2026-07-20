@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
+import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
+import 'package:status_maker/core/utils/responsive.dart';
 
 class StatusPreviewScreen extends StatelessWidget {
   final String imageUrl;
@@ -23,15 +25,15 @@ class StatusPreviewScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Status Preview', style: TextStyle(fontSize: 16)),
+        title: Text(S.t('preview_title'), style: TextStyle(fontSize: 16.sp)),
         actions: [
           IconButton(
             icon: const Icon(Icons.more_vert),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('More options coming soon'),
-                  duration: Duration(seconds: 2),
+                SnackBar(
+                  content: Text(S.t('more_soon')),
+                  duration: const Duration(seconds: 2),
                 ),
               );
             },
@@ -42,7 +44,7 @@ class StatusPreviewScreen extends StatelessWidget {
         children: [
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingLarge),
+              padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingLarge),
               child: Center(
                 child: Hero(
                   tag: imageUrl,
@@ -52,8 +54,8 @@ class StatusPreviewScreen extends StatelessWidget {
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                          blurRadius: 20.r,
+                          offset: Offset(0, 10.h),
                         ),
                       ],
                     ),
@@ -69,12 +71,12 @@ class StatusPreviewScreen extends StatelessWidget {
                           ),
                           // Overlay Elements based on Figma "Status Preview"
                           Positioned(
-                            top: 30,
-                            left: 20,
+                            top: 30.h,
+                            left: 20.w,
                             child: Row(
                               children: [
-                                const Icon(Icons.spa, color: Colors.white, size: 24),
-                                const SizedBox(width: 8),
+                                Icon(Icons.spa, color: Colors.white, size: 24.w),
+                                SizedBox(width: 8.w),
                                 Text(
                                   'RK',
                                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -96,12 +98,12 @@ class StatusPreviewScreen extends StatelessWidget {
                                   'Crafting your',
                                   style: Theme.of(context).textTheme.displayMedium?.copyWith(
                                     color: Colors.white,
-                                    fontSize: 28,
+                                    fontSize: 28.sp,
                                     shadows: [
                                       Shadow(
                                         color: Colors.black.withValues(alpha: 0.3),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
+                                        blurRadius: 4.r,
+                                        offset: Offset(0, 2.h),
                                       ),
                                     ],
                                   ),
@@ -110,12 +112,12 @@ class StatusPreviewScreen extends StatelessWidget {
                                   'daily moment',
                                   style: Theme.of(context).textTheme.displayMedium?.copyWith(
                                     color: AppColors.accent,
-                                    fontSize: 28,
+                                    fontSize: 28.sp,
                                     shadows: [
                                       Shadow(
                                         color: Colors.black.withValues(alpha: 0.3),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
+                                        blurRadius: 4.r,
+                                        offset: Offset(0, 2.h),
                                       ),
                                     ],
                                   ),
@@ -125,12 +127,12 @@ class StatusPreviewScreen extends StatelessWidget {
                           ),
                           // Heart Icon on Image
                           Positioned(
-                            bottom: 20,
-                            right: 20,
+                            bottom: 20.h,
+                            right: 20.w,
                             child: CircleAvatar(
-                              radius: 20,
+                              radius: 20.r,
                               backgroundColor: Colors.white.withValues(alpha: 0.2),
-                              child: const Icon(Icons.favorite, color: Colors.white, size: 20),
+                              child: Icon(Icons.favorite, color: Colors.white, size: 20.w),
                             ),
                           ),
                         ],
@@ -141,7 +143,7 @@ class StatusPreviewScreen extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: AppDimensions.paddingMedium),
+          SizedBox(height: AppDimensions.paddingMedium),
           _buildBottomActions(context),
         ],
       ),
@@ -150,15 +152,15 @@ class StatusPreviewScreen extends StatelessWidget {
 
   Widget _buildBottomActions(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(AppDimensions.paddingLarge),
+      padding: EdgeInsets.all(AppDimensions.paddingLarge),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppDimensions.radiusLarge)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimensions.radiusLarge)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -4),
+            blurRadius: 10.r,
+            offset: Offset(0, -4.h),
           ),
         ],
       ),
@@ -170,15 +172,15 @@ class StatusPreviewScreen extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildActionIcon(context, Icons.download_outlined, 'Save', 'Saved to your device'),
-                _buildActionIcon(context, Icons.ios_share, 'Share', 'Sharing…'),
-                _buildActionIcon(context, Icons.photo_library_outlined, 'Drafts', 'Opening drafts…'),
+                _buildActionIcon(context, Icons.download_outlined, S.t('save'), S.t('saved_device')),
+                _buildActionIcon(context, Icons.ios_share, S.t('share'), S.t('sharing')),
+                _buildActionIcon(context, Icons.photo_library_outlined, S.t('drafts'), S.t('opening_drafts')),
               ],
             ),
-            const SizedBox(height: AppDimensions.paddingLarge),
+            SizedBox(height: AppDimensions.paddingLarge),
             SizedBox(
               width: double.infinity,
-              height: 56,
+              height: 56.h,
               child: ElevatedButton.icon(
                 onPressed: () {
                   Navigator.push(
@@ -186,17 +188,17 @@ class StatusPreviewScreen extends StatelessWidget {
                     FadeSlidePageRoute(page: const StatusPersonalizerScreen()),
                   );
                 },
-                icon: const Icon(Icons.edit, size: 20),
-                label: const Text(
-                  'Customize',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                icon: Icon(Icons.edit, size: 20.w),
+                label: Text(
+                  S.t('customize'),
+                  style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(30.r),
                   ),
                 ),
               ),
@@ -219,16 +221,16 @@ class StatusPreviewScreen extends StatelessWidget {
       child: Column(
         children: [
           CircleAvatar(
-            radius: 28,
+            radius: 28.r,
             backgroundColor: AppColors.cardLight,
-            child: Icon(icon, color: AppColors.textPrimary, size: 24),
+            child: Icon(icon, color: AppColors.textPrimary, size: 24.w),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8.h),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textSecondary,
-              fontSize: 13,
+              fontSize: 13.sp,
               fontWeight: FontWeight.w500,
             ),
           ),

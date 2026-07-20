@@ -15,6 +15,16 @@ const List<String> kEditorFonts = [
   'Bebas Neue',
   'Caveat',
   'Roboto Slab',
+  'Rozha One', // Indian display serif
+  'Cinzel', // regal serif
+  // Devanagari-capable fonts for Hindi / traditional templates
+  'Tiro Devanagari Hindi',
+  'Baloo 2',
+  'Mukta',
+  'Hind',
+  'Yatra One',
+  'Kalam',
+  'Martel',
 ];
 
 /// Single source of truth for turning a [TextObject]'s style fields into a

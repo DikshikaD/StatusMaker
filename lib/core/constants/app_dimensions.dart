@@ -1,20 +1,28 @@
+import 'package:status_maker/core/utils/responsive.dart';
+
+/// App-wide spacing, radius and icon sizes.
+///
+/// These are now responsive getters (scaled via [ScreenUtil]) instead of raw
+/// constants, so a value like [paddingMedium] adapts to the device size.
+/// Because they are no longer compile-time constants they cannot be used inside
+/// `const` expressions — drop the `const` keyword at those call sites.
 class AppDimensions {
   // Padding & Margin
-  static const double paddingXSmall = 4.0;
-  static const double paddingSmall = 8.0;
-  static const double paddingMedium = 16.0;
-  static const double paddingLarge = 24.0;
-  static const double paddingXLarge = 32.0;
+  static double get paddingXSmall => 4.0.r;
+  static double get paddingSmall => 8.0.r;
+  static double get paddingMedium => 16.0.r;
+  static double get paddingLarge => 24.0.r;
+  static double get paddingXLarge => 32.0.r;
 
   // Border Radius
-  static const double radiusSmall = 8.0;
-  static const double radiusMedium = 16.0;
-  static const double radiusLarge = 24.0;
-  static const double radiusXLarge = 32.0;
-  static const double radiusCircular = 100.0;
-  
+  static double get radiusSmall => 8.0.r;
+  static double get radiusMedium => 16.0.r;
+  static double get radiusLarge => 24.0.r;
+  static double get radiusXLarge => 32.0.r;
+  static double get radiusCircular => 100.0.r;
+
   // Icon Sizes
-  static const double iconSmall = 16.0;
-  static const double iconMedium = 24.0;
-  static const double iconLarge = 32.0;
+  static double get iconSmall => 16.0.r;
+  static double get iconMedium => 24.0.r;
+  static double get iconLarge => 32.0.r;
 }

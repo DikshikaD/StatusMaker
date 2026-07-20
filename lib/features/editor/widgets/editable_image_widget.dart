@@ -52,19 +52,37 @@ class EditableImageWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = _baseSize();
 
-    Widget img = Image.file(
-      File(image.path),
-      width: size.width,
-      height: size.height,
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      errorBuilder: (_, __, ___) => Container(
-        width: size.width,
-        height: size.height,
-        color: Colors.white12,
-        child: const Icon(Icons.broken_image, color: Colors.white54, size: 40),
-      ),
-    );
+    final bool empty = image.isPlaceholder || image.path.isEmpty;
+
+    final Widget img = empty
+        ? Container(
+            width: size.width,
+            height: size.height,
+            color: Colors.black.withValues(alpha: 0.18),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.add_a_photo_outlined, color: Colors.white, size: 34),
+                SizedBox(height: 8),
+                Text('Add photo',
+                    style: TextStyle(color: Colors.white, fontSize: 13)),
+              ],
+            ),
+          )
+        : Image.file(
+            File(image.path),
+            width: size.width,
+            height: size.height,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => Container(
+              width: size.width,
+              height: size.height,
+              color: Colors.white12,
+              child:
+                  const Icon(Icons.broken_image, color: Colors.white54, size: 40),
+            ),
+          );
 
     return TransformableObject(
       position: image.position,
@@ -77,8 +95,67 @@ class EditableImageWidget extends StatelessWidget {
       child: SizedBox(
         width: size.width,
         height: size.height,
-        child: _clip(img),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _clip(img),
+            if (image.framed)
+              IgnorePointer(
+                child: CustomPaint(
+                  painter: _ShapeBorderPainter(
+                    shape: image.shape,
+                    color: image.frameColor,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Strokes the outline of an image's shape to make a photo frame/border.
+class _ShapeBorderPainter extends CustomPainter {
+  final ImageShape shape;
+  final Color color;
+
+  const _ShapeBorderPainter({required this.shape, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6
+      ..isAntiAlias = true;
+    final inset = paint.strokeWidth / 2;
+    final rect = Rect.fromLTWH(inset, inset, w - 2 * inset, h - 2 * inset);
+
+    switch (shape) {
+      case ImageShape.square:
+        canvas.drawRect(rect, paint);
+        break;
+      case ImageShape.roundedRectangle:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(rect, const Radius.circular(24)),
+          paint,
+        );
+        break;
+      case ImageShape.circle:
+      case ImageShape.oval:
+        canvas.drawOval(rect, paint);
+        break;
+      case ImageShape.heart:
+        final path = HeartClipper().getClip(Size(w, h));
+        canvas.drawPath(path, paint);
+        break;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ShapeBorderPainter old) =>
+      old.shape != shape || old.color != color;
 }

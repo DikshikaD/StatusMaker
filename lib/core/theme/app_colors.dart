@@ -3,7 +3,16 @@ import 'package:flutter/material.dart';
 class AppColors {
   // Brand colors
   static const Color primary = Color(0xFF172331); // Dark navy blue from buttons
+  static const Color primaryLight = Color(0xFF415A7E); // Lighter slate-blue
   static const Color accent = Color(0xFFE38870); // Warm peach/orange from tags
+  static const Color accentLight = Color(0xFFF3B49E); // Lighter peach
+
+  /// Brand gradient built from the primary color family.
+  static const List<Color> primaryGradient = [primary, primaryLight];
+
+  /// Accent gradient (warm peach) used across the splash, onboarding and
+  /// dialogs. The lighter end adds depth so fills never look flat.
+  static const List<Color> accentGradient = [accent, accentLight];
 
   // Light mode colors
   static const Color background = Color(0xFFF9FAFB); // Very light grey/off-white app background

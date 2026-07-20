@@ -1,3 +1,5 @@
+import 'package:status_maker/core/localization/strings.dart';
+
 /// Ready-made lines grouped by category. When a user picks a category, the
 /// editor offers these so they can create a status without typing a word.
 const Map<String, List<String>> kCategoryQuotes = {
@@ -35,22 +37,38 @@ const Map<String, List<String>> kCategoryQuotes = {
     'Today the world got a little brighter',
     'Party like it’s your birthday!',
   ],
+  // Order matches _festivalStyles concepts: Diwali, Holi, Rakhi, Ganesh, Eid,
+  // Navratri, Diwali, generic.
   'Festival': [
-    'Happy Festival! ✨',
-    'Lights, love & laughter',
-    'May this season bring you joy',
-    'Celebrate with your loved ones',
-    'Wishing you peace & prosperity',
-    'Festive vibes only',
-    'Blessings & sweet moments',
-    'Shine bright this season',
-    'Joy to you and your family 🪔',
-    'May your home glow with happiness',
-    'Sparkle & celebrate ✨',
-    'Warm wishes on this special day',
-    'Let the celebrations begin! 🎆',
-    'Sweet memories & sweeter days',
-    'May your festival be full of light',
+    'Happy Diwali 🪔',
+    'Happy Holi 🌈',
+    'Happy Raksha Bandhan',
+    'Ganpati Bappa Morya',
+    'Eid Mubarak 🌙',
+    'Happy Navratri',
+    'Shubh Deepavali',
+    'Festival of Lights ✨',
+    'Rang barse! 🌈',
+    'Tied with love',
+    'Blessings of Bappa',
+    'Blessed Eid',
+    'Nine nights of joy 💃',
+    'May Lakshmi bless your home',
+    'Celebrate with lights & love',
+  ],
+  'Business': [
+    'Dream. Build. Grow.',
+    'Success is a mindset',
+    'Lead with vision',
+    'Hustle & heart',
+    'Think big, start small',
+    'Your brand, your story',
+    'Grow every single day',
+    'Turn ideas into impact',
+    'Rise & grind',
+    'Excellence is a habit',
+    'Build your empire',
+    'Make it happen',
   ],
   'Motivation': [
     'Believe in yourself',
@@ -86,7 +104,68 @@ const Map<String, List<String>> kCategoryQuotes = {
     'You are my calm & my chaos',
     'Home is wherever you are',
   ],
+  // Traditional categories — kept in Hindi in both languages, as these
+  // greetings are shared in Devanagari by the audience they're made for.
+  'Devotional': _devotionalHi,
+  'Good Night': _goodNightHi,
+  'Suprabhat': _suprabhatHi,
+  'Suvichar': _suvicharHi,
 };
+
+// ---- Traditional Hindi line sets (shared by both language maps) -------------
+const List<String> _devotionalHi = [
+  'राधे राधे 🙏',
+  'जय श्री कृष्ण',
+  'जय श्री राम 🚩',
+  'हर हर महादेव',
+  'जय माता दी',
+  'ॐ नमः शिवाय',
+  'जय हनुमान',
+  'गणपति बाप्पा मोरया',
+  'भक्ति में ही शक्ति है',
+  'प्रभु का आशीर्वाद सदा बना रहे',
+  'ॐ शांति शांति शांति',
+  'सुबह-श्याम राधे राधे',
+];
+
+const List<String> _goodNightHi = [
+  'शुभ रात्रि 🌙',
+  'मीठे सपने',
+  'शुभ रात्रि, प्यारे',
+  'तारों भरी रात मुबारक ✨',
+  'ईश्वर आपकी रक्षा करे',
+  'अच्छे सपने आएँ 🌟',
+  'दिन भर की थकान, अब आराम',
+  'चैन की नींद सोएँ',
+  'कल फिर मिलेंगे',
+  'रात की शुभकामनाएँ',
+];
+
+const List<String> _suprabhatHi = [
+  'सुप्रभात 🌸',
+  'शुभ प्रभात 🙏',
+  'राम राम जी',
+  'आपका दिन मंगलमय हो',
+  'ईश्वर आपका दिन शुभ करे',
+  'नई सुबह, नई उमंग',
+  'चाय के साथ राम राम ☕',
+  'सुबह की पहली किरण मुबारक',
+  'आज का दिन शुभ हो',
+  'प्रभु आपको खुश रखे',
+];
+
+const List<String> _suvicharHi = [
+  'सुविचार 🌼',
+  'जैसी सोच, वैसा जीवन',
+  'मेहनत का फल मीठा होता है',
+  'सब्र का फल मीठा होता है',
+  'अच्छे कर्म ही सच्ची पूँजी हैं',
+  'संतोष ही सबसे बड़ा धन है',
+  'मुस्कान सबसे सुंदर आभूषण है',
+  'समय सबसे बड़ा शिक्षक है',
+  'कर्म करो, फल की चिंता मत करो',
+  'हर दिन एक नई सीख है',
+];
 
 const List<String> kGeneralQuotes = [
   'Live. Laugh. Love.',
@@ -106,10 +185,136 @@ const List<String> kGeneralQuotes = [
   'Create your own sunshine',
 ];
 
-/// Returns the suggestions for [category], or a general set if unknown.
+/// Hindi versions — same categories, same order (Festival matches concepts).
+const Map<String, List<String>> kCategoryQuotesHi = {
+  'Good Morning': [
+    'सुप्रभात ☀️',
+    'उठो और चमको',
+    'नया दिन, नई शुरुआत',
+    'हर सुबह एक नया मौका',
+    'आपका दिन शुभ हो',
+    'मुस्कुराओ, दिन तुम्हारा है',
+    'अच्छी शुरुआत करो',
+    'आज कुछ अच्छा होगा',
+    'चाय के साथ मुस्कान ☕',
+    'सकारात्मकता से भरा दिन',
+    'सुबह जादुई होती है',
+    'आभार के साथ दिन शुरू करो',
+    'नई सुबह की सुंदरता',
+    'धूप और मुस्कान 🌸',
+    'आज को शानदार बनाओ',
+  ],
+  'Birthday': [
+    'जन्मदिन मुबारक 🎂',
+    'एक और शानदार साल',
+    'ढेर सारी शुभकामनाएँ',
+    'कुछ विश करो 🎉',
+    'मुबारक हो! 🥳',
+    'सबसे अच्छा दिन हो',
+    'जन्मदिन की बधाई',
+    'आज का दिन तुम्हारा',
+    'हर सपना पूरा हो 🎈',
+    'पूरा केक तुम्हारा 🍰',
+    'सूरज का एक और चक्कर 🌞',
+    'सबसे प्यारा जन्मदिन',
+    'आज दुनिया रोशन हुई',
+    'खूब मनाओ!',
+    'जियो हज़ारों साल',
+  ],
+  'Festival': [
+    'दीपावली की शुभकामनाएँ 🪔',
+    'होली मुबारक 🌈',
+    'रक्षाबंधन की शुभकामनाएँ',
+    'गणपति बाप्पा मोरया',
+    'ईद मुबारक 🌙',
+    'नवरात्रि की शुभकामनाएँ',
+    'शुभ दीपावली',
+    'रोशनी का त्योहार ✨',
+    'रंग बरसे! 🌈',
+    'प्यार के बंधन',
+    'बाप्पा का आशीर्वाद',
+    'ईद की बधाई',
+    'नौ रातों की खुशी 💃',
+    'माँ लक्ष्मी का आशीर्वाद',
+    'रोशनी और प्यार से मनाओ',
+  ],
+  'Motivation': [
+    'खुद पर भरोसा रखो',
+    'बड़े सपने देखो',
+    'तुम मजबूत हो',
+    'एक कदम, एक बार',
+    'कर दिखाओ',
+    'तुम्हारी सीमा तुम हो',
+    'मेहनत रंग लाती है',
+    'सफलता सोच से शुरू',
+    'परफेक्ट नहीं, प्रगति',
+    'उठो और मेहनत करो',
+    'अनुशासन सब कुछ',
+    'हर दिन छोटे कदम',
+    'सकारात्मक ऊर्जा बनो',
+    'गिरो सात बार, उठो आठ',
+    'आत्मविश्वास ही सफलता',
+  ],
+  'Love': [
+    'तुम मेरी पहली मुस्कान',
+    'हमेशा तुम्हारे साथ ❤️',
+    'तुम + मैं = घर',
+    'मेरा दिल तुम्हारा',
+    'चाँद तक और वापस 🌙',
+    'हर पल तुम्हारे साथ ख़ास',
+    'तुमसे दुनिया रोशन',
+    'साथ रहना सबसे अच्छा',
+    'तुम मेरा आज और कल',
+    'तुम्हारी बाँहों में सुकून',
+    'हमारी कहानी सबसे प्यारी',
+    'पहली नज़र का प्यार',
+    'अब भी तुम पर फ़िदा',
+    'तुम मेरा सुकून हो',
+    'जहाँ तुम, वहीं घर',
+  ],
+  'Devotional': _devotionalHi,
+  'Good Night': _goodNightHi,
+  'Suprabhat': _suprabhatHi,
+  'Suvichar': _suvicharHi,
+  'Business': [
+    'सपना, मेहनत, तरक्की',
+    'सफलता एक सोच है',
+    'दूरदृष्टि से नेतृत्व',
+    'मेहनत और जुनून',
+    'बड़ा सोचो, छोटा शुरू',
+    'अपनी पहचान बनाओ',
+    'हर दिन बढ़ो',
+    'सोच को हकीकत बनाओ',
+    'उठो और मेहनत करो',
+    'उत्कृष्टता आदत है',
+    'अपना साम्राज्य बनाओ',
+    'कर दिखाओ',
+  ],
+};
+
+const List<String> kGeneralQuotesHi = [
+  'जियो, हँसो, प्यार करो',
+  'अच्छी सोच रखो',
+  'खुद पर गर्व करो',
+  'सकारात्मक रहो',
+  'आज को यादगार बनाओ',
+  'छोटी खुशियाँ मनाओ',
+  'चलते रहो',
+  'खुश रहो',
+  'पल संजोओ, चीज़ें नहीं',
+  'जो खुश करे वो करो',
+  'ज़िंदगी खूबसूरत है 🌸',
+  'चमको ✨',
+  'कम परफेक्ट, ज़्यादा असली',
+  'आभारी दिल, खुश ज़िंदगी',
+  'अपनी धूप खुद बनाओ',
+];
+
+/// Returns the suggestions for [category] in the current language.
 List<String> quotesForCategory(String? category) {
-  if (category != null && kCategoryQuotes.containsKey(category)) {
-    return kCategoryQuotes[category]!;
-  }
-  return kGeneralQuotes;
+  final map = S.isHi ? kCategoryQuotesHi : kCategoryQuotes;
+  final general = S.isHi ? kGeneralQuotesHi : kGeneralQuotes;
+  if (category == null) return general;
+  final key = category == 'Morning' ? 'Good Morning' : category;
+  return map[key] ?? general;
 }

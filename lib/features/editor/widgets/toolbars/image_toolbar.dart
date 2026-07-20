@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
+import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
+import 'package:status_maker/core/utils/responsive.dart';
 
-/// Contextual toolbar for the selected image: pick a shape, or delete.
-/// Move / resize / rotate happen by hand on the canvas, so they need no buttons.
+/// Contextual toolbar for the selected image: pick a shape, add/replace the
+/// photo, or delete. Light theme to match the app.
 class ImageToolbar extends StatefulWidget {
   final ImageObject image;
   final ValueChanged<ImageShape> onShape;
   final VoidCallback onDelete;
+  final VoidCallback onReplace;
+  final VoidCallback onToggleFrame;
 
   const ImageToolbar({
     super.key,
     required this.image,
     required this.onShape,
     required this.onDelete,
+    required this.onReplace,
+    required this.onToggleFrame,
   });
 
   @override
@@ -23,20 +29,28 @@ class ImageToolbar extends StatefulWidget {
 class _ImageToolbarState extends State<ImageToolbar> {
   bool _showShapes = true;
 
+  // Third field is a translation key resolved at build time.
   static const _shapes = <(ImageShape, IconData, String)>[
-    (ImageShape.square, Icons.crop_square, 'Square'),
-    (ImageShape.roundedRectangle, Icons.rounded_corner, 'Rounded'),
-    (ImageShape.circle, Icons.circle_outlined, 'Circle'),
-    (ImageShape.oval, Icons.crop_landscape, 'Oval'),
-    (ImageShape.heart, Icons.favorite_border, 'Heart'),
+    (ImageShape.square, Icons.crop_square, 'square'),
+    (ImageShape.roundedRectangle, Icons.rounded_corner, 'rounded'),
+    (ImageShape.circle, Icons.circle_outlined, 'circle'),
+    (ImageShape.oval, Icons.crop_landscape, 'oval'),
+    (ImageShape.heart, Icons.favorite_border, 'heart'),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.darkSurface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16.r,
+            offset: Offset(0, -4.h),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
@@ -48,7 +62,7 @@ class _ImageToolbarState extends State<ImageToolbar> {
               curve: Curves.easeOut,
               child: _showShapes
                   ? Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 14, 12, 2),
+                      padding: EdgeInsets.fromLTRB(12.w, 14.h, 12.w, 2.h),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: _shapes.map(_shapeButton).toList(),
@@ -57,24 +71,43 @@ class _ImageToolbarState extends State<ImageToolbar> {
                   : const SizedBox(width: double.infinity),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                children: [
-                  _action(
-                    icon: Icons.category_outlined,
-                    label: 'Shape',
-                    active: _showShapes,
-                    onTap: () => setState(() => _showShapes = !_showShapes),
-                  ),
-                  const Spacer(),
-                  _action(
-                    icon: Icons.delete_outline,
-                    label: 'Delete',
-                    active: false,
-                    color: Colors.redAccent,
-                    onTap: widget.onDelete,
-                  ),
-                ],
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _action(
+                      icon: Icons.category_outlined,
+                      label: S.t('shape'),
+                      active: _showShapes,
+                      onTap: () => setState(() => _showShapes = !_showShapes),
+                    ),
+                    SizedBox(width: 18.w),
+                    _action(
+                      icon: Icons.border_style,
+                      label: S.t('frame'),
+                      active: widget.image.framed,
+                      onTap: widget.onToggleFrame,
+                    ),
+                    SizedBox(width: 18.w),
+                    _action(
+                      icon: Icons.add_photo_alternate_outlined,
+                      label: widget.image.isPlaceholder
+                          ? S.t('add_photo')
+                          : S.t('replace'),
+                      active: false,
+                      onTap: widget.onReplace,
+                    ),
+                    SizedBox(width: 18.w),
+                    _action(
+                      icon: Icons.delete_outline,
+                      label: S.t('delete'),
+                      active: false,
+                      color: Colors.redAccent,
+                      onTap: widget.onDelete,
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -92,20 +125,21 @@ class _ImageToolbarState extends State<ImageToolbar> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 54,
-            height: 54,
+            width: 54.w,
+            height: 54.h,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: selected
-                  ? AppColors.accent
-                  : Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
+              color: selected ? AppColors.accent : AppColors.cardLight,
+              borderRadius: BorderRadius.circular(16.r),
             ),
-            child: Icon(s.$2, color: Colors.white, size: 26),
+            child: Icon(s.$2,
+                color: selected ? Colors.white : AppColors.textPrimary,
+                size: 26.w),
           ),
-          const SizedBox(height: 5),
-          Text(s.$3,
-              style: const TextStyle(
-                  color: AppColors.darkTextSecondary, fontSize: 11)),
+          SizedBox(height: 5.h),
+          Text(S.t(s.$3),
+              style: TextStyle(
+                  color: AppColors.textSecondary, fontSize: 11.sp)),
         ],
       ),
     );
@@ -118,27 +152,31 @@ class _ImageToolbarState extends State<ImageToolbar> {
     required VoidCallback onTap,
     Color? color,
   }) {
-    final c = color ?? Colors.white;
+    final tint = color ?? AppColors.textPrimary;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 44.w,
+            height: 44.h,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               color: active
-                  ? AppColors.accent.withValues(alpha: 0.9)
-                  : Colors.white.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(14),
+                  ? AppColors.accent
+                  : (color != null
+                      ? color.withValues(alpha: 0.12)
+                      : AppColors.cardLight),
+              borderRadius: BorderRadius.circular(14.r),
             ),
-            child: Icon(icon, color: c, size: 22),
+            child: Icon(icon,
+                color: active ? Colors.white : tint, size: 22.w),
           ),
-          const SizedBox(width: 8),
+          SizedBox(width: 8.w),
           Text(label,
               style: TextStyle(
-                  color: c, fontSize: 14, fontWeight: FontWeight.w600)),
+                  color: tint, fontSize: 14.sp, fontWeight: FontWeight.w600)),
         ],
       ),
     );
