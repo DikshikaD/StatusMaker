@@ -68,6 +68,27 @@ class StatusPreviewScreen extends StatelessWidget {
                             fit: BoxFit.cover,
                             height: MediaQuery.of(context).size.height * 0.65,
                             width: double.infinity,
+                            // Full-bleed hero: decode at ~phone width, not the
+                            // 2000px source, and fade in with a placeholder.
+                            cacheWidth: 1080,
+                            frameBuilder: (context, child, frame, wasSync) {
+                              if (wasSync) return child;
+                              return AnimatedOpacity(
+                                opacity: frame == null ? 0 : 1,
+                                duration: const Duration(milliseconds: 300),
+                                child: child,
+                              );
+                            },
+                            loadingBuilder: (context, child, progress) =>
+                                progress == null
+                                    ? child
+                                    : Container(color: AppColors.cardLight),
+                            errorBuilder: (_, __, ___) => Container(
+                              color: AppColors.cardLight,
+                              alignment: Alignment.center,
+                              child: Icon(Icons.broken_image,
+                                  color: AppColors.textSecondary),
+                            ),
                           ),
                           // Overlay Elements based on Figma "Status Preview"
                           Positioned(

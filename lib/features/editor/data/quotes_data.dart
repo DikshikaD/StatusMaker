@@ -318,3 +318,36 @@ List<String> quotesForCategory(String? category) {
   final key = category == 'Morning' ? 'Good Morning' : category;
   return map[key] ?? general;
 }
+
+/// Builds a large, de-duplicated pool of quotes for [category].
+///
+/// The selected category's own lines come first (so a specific category is
+/// honoured), then the general lines and every other category are appended.
+/// This guarantees there are always well over 25 unique quotes to show and to
+/// cycle through when the user refreshes. When [category] is null (default),
+/// the general lines lead. The result never contains duplicates.
+List<String> quotePoolForCategory(String? category) {
+  final map = S.isHi ? kCategoryQuotesHi : kCategoryQuotes;
+  final general = S.isHi ? kGeneralQuotesHi : kGeneralQuotes;
+
+  final seen = <String>{};
+  final pool = <String>[];
+  void addAll(List<String> list) {
+    for (final q in list) {
+      if (seen.add(q)) pool.add(q);
+    }
+  }
+
+  // Selected category first (if it maps to a real list).
+  if (category != null) {
+    final key = category == 'Morning' ? 'Good Morning' : category;
+    final own = map[key];
+    if (own != null) addAll(own);
+  }
+  // Then general lines, then everything else — plenty to reach 25+.
+  addAll(general);
+  for (final list in map.values) {
+    addAll(list);
+  }
+  return pool;
+}

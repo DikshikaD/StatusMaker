@@ -34,6 +34,10 @@ class CommunitySubmissionScreen extends StatelessWidget {
                 child: Image.network(
                   'https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop',
                   fit: BoxFit.cover,
+                  cacheWidth: 900,
+                  loadingBuilder: (context, child, progress) => progress == null
+                      ? child
+                      : Container(color: AppColors.cardLight),
                   errorBuilder: (_, __, ___) => Center(child: Icon(Icons.image, size: 50.w, color: AppColors.border)),
                 ),
               ),
@@ -42,7 +46,7 @@ class CommunitySubmissionScreen extends StatelessWidget {
             TextField(
               decoration: InputDecoration(
                 hintText: 'Add a caption or tags...',
-                hintStyle: const TextStyle(color: AppColors.textSecondary),
+                hintStyle: TextStyle(color: AppColors.textSecondary),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16.r),
                   borderSide: BorderSide.none,

@@ -3,10 +3,9 @@ import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/shared/widgets/status_card.dart';
-import 'package:status_maker/shared/widgets/empty_state.dart';
-import 'package:status_maker/features/preview/presentation/status_preview_screen.dart';
 import 'package:status_maker/features/explore/presentation/explore_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
+import 'package:status_maker/features/editor/data/templates_data.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
@@ -28,10 +27,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String? _selected;
 
-  IconData get _selectedIcon => _categories.firstWhere(
-        (c) => c['name'] == _selected,
-        orElse: () => _categories.first,
-      )['icon'] as IconData;
+  // Pseudo like counts so cards feel alive (display only).
+  static const _likeLabels = ['2.4k', '1.2k', '980', '3.1k', '760', '1.8k',
+    '540', '2.0k'];
 
   @override
   Widget build(BuildContext context) {
@@ -75,21 +73,41 @@ class _HomeScreenState extends State<HomeScreen> {
             SizedBox(height: AppDimensions.paddingSmall),
             _buildCategories(),
             SizedBox(height: AppDimensions.paddingLarge),
-            if (_selected == null)
-              _buildFeed(context)
-            else
-              SizedBox(
-                height: 440.h,
-                child: EmptyState(
-                  icon: _selectedIcon,
-                  title: S.isHi
-                      ? '${S.cat(_selected!)} के लिए अभी कोई स्टेटस नहीं'
-                      : 'No $_selected statuses yet',
-                  message: S.isHi
-                      ? 'नए ${S.cat(_selected!)} डिज़ाइन जल्द आ रहे हैं। तब तक, अपना बनाने के लिए “${S.t('nav_create')}” पर टैप करें!'
-                      : 'Fresh $_selected designs are on the way. Meanwhile, tap Create to make your own!',
-                ),
+            // Smoothly cross-fade + slide the header and feed when the
+            // selected category changes.
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.05, 0.02),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              layoutBuilder: (currentChild, previousChildren) => Stack(
+                alignment: Alignment.topCenter,
+                children: [
+                  ...previousChildren,
+                  if (currentChild != null) currentChild,
+                ],
               ),
+              child: Column(
+                key: ValueKey(_selected ?? '_all'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSectionHeader(),
+                  SizedBox(height: AppDimensions.paddingMedium),
+                  _buildFeed(context),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -98,106 +116,200 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildCategories() {
     return SizedBox(
-      height: 90.h,
+      height: 46.h,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding:
             EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
-        itemCount: _categories.length,
+        // +1 for the leading "All" chip.
+        itemCount: _categories.length + 1,
         itemBuilder: (context, index) {
-          final category = _categories[index];
-          final name = category['name'] as String;
-          final isActive = name == _selected;
-          return Padding(
-            padding: EdgeInsets.only(right: AppDimensions.paddingMedium),
-            child: GestureDetector(
-              onTap: () => setState(() => _selected = isActive ? null : name),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 28.r,
-                    backgroundColor: isActive
-                        ? AppColors.accent
-                        : AppColors.cardLight,
-                    child: Icon(
-                      category['icon'] as IconData,
-                      color: isActive ? Colors.white : AppColors.textSecondary,
-                      size: 24.w,
-                    ),
-                  ),
-                  SizedBox(height: AppDimensions.paddingSmall),
-                  Text(
-                    S.cat(name),
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                      color: isActive ? AppColors.accent : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          // Builder gives each chip its own context so the row can slide it
+          // into view when tapped.
+          return Builder(
+            builder: (chipContext) {
+              if (index == 0) {
+                return _categoryChip(
+                  icon: Icons.apps_rounded,
+                  label: S.t('all'),
+                  isActive: _selected == null,
+                  onTap: () {
+                    setState(() => _selected = null);
+                    _centerChip(chipContext);
+                  },
+                );
+              }
+              final category = _categories[index - 1];
+              final name = category['name'] as String;
+              return _categoryChip(
+                icon: category['icon'] as IconData,
+                label: S.cat(name),
+                isActive: name == _selected,
+                onTap: () {
+                  setState(() =>
+                      _selected = _selected == name ? null : name);
+                  _centerChip(chipContext);
+                },
+              );
+            },
           );
         },
       ),
     );
   }
 
+  /// Smoothly slides the tapped chip toward the centre of the row.
+  void _centerChip(BuildContext chipContext) {
+    Scrollable.ensureVisible(
+      chipContext,
+      alignment: 0.5,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  Widget _categoryChip({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: EdgeInsets.only(right: 10.w),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: AnimatedScale(
+          scale: isActive ? 1.06 : 1.0,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutBack,
+          child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 9.h),
+          decoration: BoxDecoration(
+            gradient: isActive
+                ? const LinearGradient(colors: AppColors.accentGradient)
+                : null,
+            color: isActive ? null : AppColors.surface,
+            borderRadius: BorderRadius.circular(24.r),
+            border: Border.all(
+              color: isActive ? Colors.transparent : AppColors.border,
+            ),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: AppColors.accent.withValues(alpha: 0.35),
+                      blurRadius: 12.r,
+                      offset: Offset(0, 4.h),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 18.w,
+                color: isActive ? Colors.white : AppColors.accent,
+              ),
+              SizedBox(width: 7.w),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w700,
+                  color: isActive ? Colors.white : AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader() {
+    final title =
+        _selected == null ? S.t('popular_templates') : S.cat(_selected!);
+    final count = templatesForCategory(_selected).length;
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 4.w,
+            height: 20.h,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: AppColors.accentGradient,
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(4.r),
+            ),
+          ),
+          SizedBox(width: 10.w),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 18.sp,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            '$count ${S.t('designs')}',
+            style: TextStyle(
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFeed(BuildContext context) {
+    final templates = templatesForCategory(_selected);
+    final tag = _selected == null ? null : S.cat(_selected!);
+
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
       child: Column(
         children: [
-          StatusCard(
-            title:
-                "The sun is a daily reminder that we too can rise again from the darkness.",
-            tag: "Daily Highlight",
-            likes: "2.4k",
-            shares: "840",
-            imageUrl:
-                "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2070&auto=format&fit=crop",
-            isHighlight: true,
-            onCustomize: () {
-              Navigator.push(
-                context,
-                FadeSlidePageRoute(
-                    page: const StatusPreviewScreen(
-                        imageUrl:
-                            "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2070&auto=format&fit=crop")),
-              );
-            },
-            onOneTap: () {
-              Navigator.push(
-                context,
-                FadeSlidePageRoute(
-                  page: const StatusPersonalizerScreen(
-                    templateName: 'Daily Highlight',
-                    category: 'Good Morning',
-                  ),
-                ),
-              );
-            },
-          ),
-          SizedBox(height: AppDimensions.paddingLarge),
-          StatusCard(
-            title: "Small steps lead to big results.",
-            tag: "Motivation • Trending now",
-            likes: "1.2k",
-            shares: "340",
-            imageUrl:
-                "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=2073&auto=format&fit=crop",
-            onCustomize: () {
-              Navigator.push(
-                context,
-                FadeSlidePageRoute(
-                    page: const StatusPreviewScreen(
-                        imageUrl:
-                            "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=2073&auto=format&fit=crop")),
-              );
-            },
-          ),
-          SizedBox(height: AppDimensions.paddingLarge),
+          for (var i = 0; i < templates.length; i++) ...[
+            // Each card paints a gradient + CustomPaint motif + styled text.
+            // Isolating it in its own layer means scrolling or one card's
+            // press/like animation never repaints the others.
+            RepaintBoundary(
+              child: StatusCard(
+                template: templates[i],
+                tag: tag,
+                likes: _likeLabels[i % _likeLabels.length],
+                onCustomize: () => _openEditor(context, templates[i]),
+              ),
+            ),
+            SizedBox(height: AppDimensions.paddingLarge),
+          ],
         ],
+      ),
+    );
+  }
+
+  void _openEditor(BuildContext context, StatusTemplate template) {
+    Navigator.push(
+      context,
+      FadeSlidePageRoute(
+        page: StatusPersonalizerScreen(
+          templateName: 'Template',
+          category: _selected ?? '',
+          template: template,
+        ),
       ),
     );
   }

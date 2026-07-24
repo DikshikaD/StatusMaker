@@ -4,6 +4,7 @@ import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
+import 'package:status_maker/features/editor/widgets/bottom_sheets/font_sheet.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
 enum _Panel { none, font, size, color, align, letter, line }
@@ -244,6 +245,21 @@ class _TextToolbarState extends State<TextToolbar> {
     );
   }
 
+  /// Opens the full-screen-style font picker: a 3-column grid where every
+  /// tile previews the app name in that font, so styles are easy to compare.
+  void _openFontSheet() {
+    setState(() => _active = _Panel.none);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FontSheet(
+        currentFont: _t.fontFamily,
+        onSelect: (font) => widget.onChanged(_t.copyWith(fontFamily: font)),
+      ),
+    );
+  }
+
   Widget _iconRow() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -253,7 +269,7 @@ class _TextToolbarState extends State<TextToolbar> {
           _tool(
             label: S.t('font'),
             active: _active == _Panel.font,
-            onTap: () => _toggle(_Panel.font),
+            onTap: _openFontSheet,
             childBuilder: (c) => Text('Aa',
                 style: TextStyle(
                     color: c, fontSize: 18.sp, fontWeight: FontWeight.w700)),

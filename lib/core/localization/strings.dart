@@ -70,6 +70,14 @@ class S {
     'cat_Suprabhat': ['Good Morning', 'शुभ प्रभात'],
     'cat_Good Night': ['Good Night', 'शुभ रात्रि'],
     'cat_Suvichar': ['Suvichar', 'सुविचार'],
+    'cat_General': ['General', 'सामान्य'],
+
+    // category picker (create flow)
+    'choose_category': ['Choose a category', 'श्रेणी चुनें'],
+    'choose_category_desc': [
+      'We\'ll suggest matching quotes for you',
+      'हम आपके लिए मिलती-जुलती पंक्तियाँ सुझाएँगे'
+    ],
 
     // settings
     'settings_title': ['Settings', 'सेटिंग्स'],
@@ -77,6 +85,15 @@ class S {
     'language_desc': ['Choose your app language', 'ऐप की भाषा चुनें'],
     'english': ['English', 'English'],
     'hindi': ['हिंदी', 'हिंदी'],
+    'appearance': ['Appearance', 'दिखावट'],
+    'appearance_desc': [
+      'Switch between light and dark theme',
+      'लाइट और डार्क थीम के बीच स्विच करें'
+    ],
+    'theme': ['Theme', 'थीम'],
+    'light_theme': ['Light', 'लाइट'],
+    'dark_theme': ['Dark', 'डार्क'],
+    'dark_mode': ['Dark mode', 'डार्क मोड'],
     'about': ['About', 'परिचय'],
     'version': ['Version', 'वर्शन'],
     'rate_us': ['Rate us', 'हमें रेट करें'],
@@ -104,6 +121,9 @@ class S {
     'open_editor': ['Open Editor', 'एडिटर खोलें'],
     'themes': ['Themes', 'थीम'],
     'popular_templates': ['Popular Templates', 'लोकप्रिय टेम्पलेट'],
+    'all': ['All', 'सभी'],
+    'designs': ['designs', 'डिज़ाइन'],
+    'trending_now': ['Trending now', 'अभी ट्रेंडिंग'],
 
     // favorites
     'favorites_title': ['Favorites', 'पसंदीदा'],

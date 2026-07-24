@@ -75,6 +75,9 @@ class EditableImageWidget extends StatelessWidget {
             height: size.height,
             fit: BoxFit.cover,
             gaplessPlayback: true,
+            // Decode only at the resolution actually shown on screen instead of
+            // the full camera resolution — massively lowers memory per photo.
+            cacheWidth: (size.width * 2).round().clamp(1, 2000),
             errorBuilder: (_, __, ___) => Container(
               width: size.width,
               height: size.height,

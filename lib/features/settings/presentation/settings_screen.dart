@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
+import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
@@ -22,6 +23,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: EdgeInsets.all(20.w),
         children: [
+          _sectionTitle(S.t('appearance')),
+          SizedBox(height: 4.h),
+          Text(
+            S.t('appearance_desc'),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13.sp),
+          ),
+          SizedBox(height: 14.h),
+          _themeToggle(),
+
+          SizedBox(height: 32.h),
           _sectionTitle(S.t('language')),
           SizedBox(height: 4.h),
           Text(
@@ -52,6 +63,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
           color: AppColors.textPrimary,
         ),
       );
+
+  /// Primary control: a single row with a switch to flip dark mode on/off.
+  Widget _themeToggle() {
+    final isDark = ThemeController.isDark;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 6.h),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isDark ? Icons.dark_mode : Icons.light_mode,
+            color: AppColors.accent,
+            size: 22.w,
+          ),
+          SizedBox(width: 14.w),
+          Expanded(
+            child: Text(
+              S.t('dark_mode'),
+              style: TextStyle(
+                fontSize: 15.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          Switch(
+            value: isDark,
+            activeColor: AppColors.accent,
+            onChanged: (_) => setState(ThemeController.toggle),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _languageTile(String label, String code) {
     final selected = S.lang.value == code;
@@ -103,7 +152,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: Text(label,
             style: TextStyle(fontSize: 15.sp, color: AppColors.textPrimary)),
         trailing: tappable
-            ? const Icon(Icons.chevron_right, color: AppColors.textSecondary)
+            ? Icon(Icons.chevron_right, color: AppColors.textSecondary)
             : null,
         onTap: tappable
             ? () {

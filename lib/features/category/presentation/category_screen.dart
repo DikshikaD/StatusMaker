@@ -53,8 +53,13 @@ class CategoryScreen extends StatelessWidget {
                 mainAxisSpacing: 16.h,
               ),
               itemCount: templates.length,
-              itemBuilder: (context, index) =>
-                  _TemplateCard(template: templates[index], category: categoryName),
+              // Each tile draws a gradient + CustomPaint motif + styled text;
+              // a RepaintBoundary keeps one tile's paint from touching others
+              // while the grid scrolls.
+              itemBuilder: (context, index) => RepaintBoundary(
+                child: _TemplateCard(
+                    template: templates[index], category: categoryName),
+              ),
             ),
           ),
         ],

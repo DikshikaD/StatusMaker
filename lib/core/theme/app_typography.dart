@@ -39,7 +39,8 @@ class AppTypography {
       labelLarge: GoogleFonts.inter(
         fontSize: 14.sp,
         fontWeight: FontWeight.w600,
-        color: AppColors.surface,
+        // Button labels sit on the navy primary color in both themes.
+        color: AppColors.onPrimary,
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
+import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/home/presentation/home_screen.dart';
 import 'package:status_maker/features/explore/presentation/explore_screen.dart';
@@ -25,13 +26,19 @@ class _NavItem {
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = const [
-    HomeScreen(),
-    ExploreScreen(),
-    CreateScreen(),
-    FavoritesScreen(),
-    SettingsScreen(),
-  ];
+  // Built fresh on every build (see [build]) so that a theme or language change
+  // recreates the tab widgets and they repaint with the new palette. Using a
+  // cached/const list would keep the old colors on inactive tabs.
+  List<Widget> get _pages => [
+        // Intentionally NOT const: const instances are canonicalized to the same
+        // object, so IndexedStack would skip rebuilding them and inactive tabs
+        // would keep the old theme colors.
+        HomeScreen(),
+        ExploreScreen(),
+        CreateScreen(),
+        FavoritesScreen(),
+        SettingsScreen(),
+      ];
 
   static const List<_NavItem> _items = [
     _NavItem(Icons.home_outlined, Icons.home_rounded, 'nav_home'),
@@ -43,9 +50,16 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: _pages),
-      bottomNavigationBar: _buildNav(context),
+    // MainLayout is a pushed route, so a MaterialApp rebuild won't reach it.
+    // Listen to theme + language directly so every tab repaints on change.
+    return ListenableBuilder(
+      listenable: Listenable.merge([ThemeController.mode, S.lang]),
+      builder: (context, _) {
+        return Scaffold(
+          body: IndexedStack(index: _currentIndex, children: _pages),
+          bottomNavigationBar: _buildNav(context),
+        );
+      },
     );
   }
 

@@ -6,6 +6,7 @@ import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/features/category/presentation/category_screen.dart';
 import 'package:status_maker/features/preview/presentation/status_preview_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
+import 'package:status_maker/features/editor/widgets/bottom_sheets/category_picker_sheet.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
 class ExploreScreen extends StatelessWidget {
@@ -47,14 +48,7 @@ class ExploreScreen extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            FadeSlidePageRoute(
-              page: const StatusPersonalizerScreen(templateName: 'New Status'),
-            ),
-          );
-        },
+        onPressed: () => _startCreate(context),
         backgroundColor: AppColors.accent,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(
@@ -66,10 +60,33 @@ class ExploreScreen extends StatelessWidget {
     );
   }
 
+  /// Create flow: ask for a category first, then open the editor with quotes
+  /// matching that category already surfaced.
+  Future<void> _startCreate(BuildContext context) async {
+    final category = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const CategoryPickerSheet(),
+    );
+    // Dismissed without choosing → do nothing.
+    if (category == null || !context.mounted) return;
+    Navigator.push(
+      context,
+      FadeSlidePageRoute(
+        page: StatusPersonalizerScreen(
+          templateName: 'New Status',
+          category: category,
+          showQuotesOnStart: true,
+        ),
+      ),
+    );
+  }
+
   Widget _buildSearchBar() {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(30.r),
         boxShadow: [
           BoxShadow(
@@ -83,13 +100,13 @@ class ExploreScreen extends StatelessWidget {
         decoration: InputDecoration(
           hintText: S.t('search_hint'),
           hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14.sp),
-          prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+          prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30.r),
             borderSide: BorderSide.none,
           ),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: AppColors.surface,
           contentPadding: EdgeInsets.symmetric(vertical: 0, horizontal: 20.w),
         ),
       ),
@@ -124,7 +141,7 @@ class ExploreScreen extends StatelessWidget {
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.accent.withValues(alpha: 0.15) : Colors.white,
+                  color: isSelected ? AppColors.accent.withValues(alpha: 0.15) : AppColors.surface,
                   borderRadius: BorderRadius.circular(20.r),
                   border: Border.all(
                     color: isSelected ? AppColors.accent.withValues(alpha: 0.3) : AppColors.border,
@@ -227,9 +244,25 @@ class ExploreScreen extends StatelessWidget {
             child: Image.network(
               imageUrl,
               fit: BoxFit.cover,
+              // Decode at roughly the on-screen size (half-width card) rather
+              // than the full 2000px source: less memory, faster first paint.
+              cacheWidth: 700,
+              // Fade the image in and hold a neutral placeholder while loading
+              // so the grid never flashes or janks.
+              frameBuilder: (context, child, frame, wasSync) {
+                if (wasSync) return child;
+                return AnimatedOpacity(
+                  opacity: frame == null ? 0 : 1,
+                  duration: const Duration(milliseconds: 250),
+                  child: child,
+                );
+              },
+              loadingBuilder: (context, child, progress) => progress == null
+                  ? child
+                  : Container(color: AppColors.cardLight),
               errorBuilder: (context, error, stackTrace) => Container(
                 color: AppColors.cardLight,
-                child: const Icon(Icons.broken_image, color: AppColors.textSecondary),
+                child: Icon(Icons.broken_image, color: AppColors.textSecondary),
               ),
             ),
           ),

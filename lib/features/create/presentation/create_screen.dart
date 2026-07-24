@@ -210,7 +210,20 @@ class CreateScreen extends StatelessWidget {
             child: Image.network(
               imageUrl,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: AppColors.border),
+              // Cards are only ~160px wide; decode small instead of at 2000px.
+              cacheWidth: 500,
+              frameBuilder: (context, child, frame, wasSync) {
+                if (wasSync) return child;
+                return AnimatedOpacity(
+                  opacity: frame == null ? 0 : 1,
+                  duration: const Duration(milliseconds: 250),
+                  child: child,
+                );
+              },
+              loadingBuilder: (context, child, progress) => progress == null
+                  ? child
+                  : Container(color: AppColors.cardLight),
+              errorBuilder: (_, __, ___) => Icon(Icons.broken_image, color: AppColors.border),
             ),
           ),
           Container(

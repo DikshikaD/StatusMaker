@@ -20,11 +20,16 @@ class StatusPersonalizerScreen extends StatefulWidget {
   final String category;
   final StatusTemplate? template;
 
+  /// When true, the quote suggestions sheet is opened automatically once the
+  /// editor has loaded — used by the "Create" flow after a category is chosen.
+  final bool showQuotesOnStart;
+
   const StatusPersonalizerScreen({
     super.key,
     this.templateName = 'Status',
     this.category = '',
     this.template,
+    this.showQuotesOnStart = false,
   });
 
   @override
@@ -82,6 +87,12 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         ));
       }
       _controller.clearSelection();
+
+      // Straight after the canvas is ready, surface category-matched quotes
+      // so the user can start from a ready-made line.
+      if (widget.showQuotesOnStart && mounted) {
+        _showQuotesSheet();
+      }
     });
   }
 
@@ -94,7 +105,13 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   // ---- actions --------------------------------------------------------------
   Future<void> _pickImage() async {
     final x =
-        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+        await _picker.pickImage(
+            source: ImageSource.gallery,
+            imageQuality: 90,
+            // Downscale huge camera photos on pick: a status never needs more
+            // than ~1080p, and this slashes decode memory and file size.
+            maxWidth: 1920,
+            maxHeight: 1920);
     if (x != null) _controller.addImage(x.path);
   }
 
@@ -106,7 +123,13 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
 
   Future<void> _replaceImage(String id) async {
     final x =
-        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+        await _picker.pickImage(
+            source: ImageSource.gallery,
+            imageQuality: 90,
+            // Downscale huge camera photos on pick: a status never needs more
+            // than ~1080p, and this slashes decode memory and file size.
+            maxWidth: 1920,
+            maxHeight: 1920);
     if (x != null) _controller.fillImage(id, x.path);
   }
 
@@ -149,7 +172,10 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         onPickGallery: () async {
           Navigator.of(context).pop();
           final x = await _picker.pickImage(
-              source: ImageSource.gallery, imageQuality: 90);
+              source: ImageSource.gallery,
+              imageQuality: 90,
+              maxWidth: 1920,
+              maxHeight: 1920);
           if (x != null) {
             _controller.setBackground(BackgroundState(imagePath: x.path));
           }
@@ -254,7 +280,7 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
             onPressed: () => Navigator.of(context).maybePop(),
           ),
           const Spacer(),
