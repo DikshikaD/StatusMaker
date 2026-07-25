@@ -272,6 +272,7 @@ class S {
     // editor — background sheet
     'presets': ['Presets', 'प्रीसेट'],
     'gallery': ['Gallery', 'गैलरी'],
+    'photo_backgrounds': ['Photo Backgrounds', 'फ़ोटो बैकग्राउंड'],
     'choose_gallery': ['Choose from Gallery', 'गैलरी से चुनें'],
     'none': ['None', 'कोई नहीं'],
     'colors': ['Colors', 'रंग'],

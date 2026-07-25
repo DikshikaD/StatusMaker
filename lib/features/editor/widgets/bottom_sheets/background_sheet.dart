@@ -3,6 +3,7 @@ import 'package:status_maker/core/constants/app_assets.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
+import 'package:status_maker/features/editor/data/background_images.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
 /// Built-in backgrounds — solid colours and gradients. No assets needed.
@@ -45,10 +46,14 @@ class BackgroundSheet extends StatefulWidget {
   final ValueChanged<BackgroundState> onSelect;
   final VoidCallback onPickGallery;
 
+  /// The current editor category, used to surface matching photo backgrounds.
+  final String? category;
+
   const BackgroundSheet({
     super.key,
     required this.onSelect,
     required this.onPickGallery,
+    this.category,
   });
 
   @override
@@ -136,18 +141,27 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Category-matched real photo backgrounds (10+). Loaded from the
+        // network with a soft scrim applied on the canvas for text legibility.
+        _sectionHeader(S.t('photo_backgrounds')),
+        _grid([
+          for (final path in backgroundImagesForCategory(widget.category))
+            _assetTile(path),
+        ]),
+        SizedBox(height: 20.h),
         // Solid colours & gradients (the currently available presets).
         _sectionHeader(S.t('colors')),
         _grid([
           _noneTile(),
           for (final bg in kBackgroundPresets) _colorTile(bg),
         ]),
-        // Image categories: Morning, Festival, Love.
-        for (final cat in kBackgroundCategories) ...[
-          SizedBox(height: 20.h),
-          _sectionHeader(S.t(cat.labelKey)),
-          _grid([for (final path in cat.assets) _assetTile(path)]),
-        ],
+        // Any bundled asset image categories (may be empty).
+        for (final cat in kBackgroundCategories)
+          if (cat.assets.isNotEmpty) ...[
+            SizedBox(height: 20.h),
+            _sectionHeader(S.t(cat.labelKey)),
+            _grid([for (final path in cat.assets) _assetTile(path)]),
+          ],
       ],
     );
   }

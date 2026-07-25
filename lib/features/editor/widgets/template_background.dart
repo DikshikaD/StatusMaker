@@ -43,6 +43,12 @@ class TemplateBackground extends StatelessWidget {
       bg = ColoredBox(color: state.color ?? const Color(0xFF0F172A));
     }
 
+    // A photo can be visually busy, so overlay a soft dark scrim (stronger at
+    // the top/bottom, lighter in the middle) whenever the background is an
+    // image. This keeps text readable no matter where it's placed, and — since
+    // it bakes into the export — the saved status stays legible too.
+    final bool isPhoto = state.isImage || state.isAsset;
+
     return RepaintBoundary(
       child: GestureDetector(
         onTap: onTap,
@@ -52,6 +58,21 @@ class TemplateBackground extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               bg,
+              if (isPhoto)
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0x59000000), // ~35% black (top)
+                        Color(0x1A000000), // ~10% black (middle)
+                        Color(0x66000000), // ~40% black (bottom)
+                      ],
+                      stops: [0.0, 0.5, 1.0],
+                    ),
+                  ),
+                ),
               if (state.motif != TemplateMotif.none)
                 Positioned.fill(
                   child: CustomPaint(

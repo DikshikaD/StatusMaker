@@ -196,6 +196,7 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => BackgroundSheet(
+        category: widget.category,
         onSelect: _controller.setBackground,
         onPickGallery: () async {
           Navigator.of(context).pop();
