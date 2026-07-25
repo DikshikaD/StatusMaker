@@ -3,6 +3,9 @@ import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/utils/responsive.dart';
+import 'package:status_maker/core/utils/app_snackbar.dart';
+import 'package:status_maker/shared/widgets/app_shimmer.dart';
+import 'package:status_maker/shared/utils/share_image.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 
 /// A feed card for a *saved* status (a real user creation from Supabase). Shows
@@ -34,6 +37,18 @@ class SavedStatusCard extends StatefulWidget {
 
 class _SavedStatusCardState extends State<SavedStatusCard> {
   bool _pressed = false;
+  bool _liked = false;
+  bool _sharing = false;
+
+  Future<void> _share() async {
+    final url = widget.status.thumbUrl;
+    if (url == null || url.isEmpty || _sharing) return;
+    setState(() => _sharing = true);
+    final ok = await shareImageUrl(url, text: widget.status.title);
+    if (!mounted) return;
+    setState(() => _sharing = false);
+    if (!ok) AppSnackBar.error(context, S.t('something_wrong'));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,21 +101,20 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
                     s.thumbUrl!,
                     fit: BoxFit.cover,
                     gaplessPlayback: true,
+                    // Fade the photo in once decoded (no pop-in).
+                    frameBuilder: (context, child, frame, wasSync) {
+                      if (wasSync) return child;
+                      return AnimatedOpacity(
+                        opacity: frame == null ? 0 : 1,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeOut,
+                        child: child,
+                      );
+                    },
+                    // Shimmer while the thumbnail downloads.
                     loadingBuilder: (context, child, progress) {
                       if (progress == null) return child;
-                      return ColoredBox(
-                        color: AppColors.cardLight,
-                        child: Center(
-                          child: SizedBox(
-                            width: 26.w,
-                            height: 26.w,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: AppColors.accent,
-                            ),
-                          ),
-                        ),
-                      );
+                      return const AppShimmer(child: ShimmerBox(radius: 0));
                     },
                     errorBuilder: (_, __, ___) => ColoredBox(
                       color: AppColors.cardLight,
@@ -144,33 +158,32 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
   }
 
   Widget _actionBar(SavedStatus s) {
+    final likeCount = s.likesCount + (_liked ? 1 : 0);
     return Padding(
-      padding: EdgeInsets.fromLTRB(12.w, 10.h, 12.w, 12.h),
+      padding: EdgeInsets.fromLTRB(8.w, 10.h, 12.w, 12.h),
       child: Row(
         children: [
-          Icon(Icons.favorite_border,
-              size: 20.w, color: AppColors.textSecondary),
-          SizedBox(width: 5.w),
-          Text(
-            '${s.likesCount}',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w600,
-            ),
+          // Like
+          _iconAction(
+            icon: _liked ? Icons.favorite : Icons.favorite_border,
+            color: _liked ? AppColors.accent : AppColors.textSecondary,
+            label: '$likeCount',
+            onTap: () => setState(() => _liked = !_liked),
           ),
-          if (widget.onDelete != null) ...[
-            SizedBox(width: 6.w),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: widget.onDelete,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 6.h),
-                child: Icon(Icons.delete_outline,
-                    size: 20.w, color: AppColors.textSecondary),
-              ),
+          // Share (beside like)
+          _iconAction(
+            icon: Icons.share_outlined,
+            color: AppColors.textSecondary,
+            label: S.t('share'),
+            busy: _sharing,
+            onTap: _share,
+          ),
+          if (widget.onDelete != null)
+            _iconAction(
+              icon: Icons.delete_outline,
+              color: AppColors.textSecondary,
+              onTap: widget.onDelete!,
             ),
-          ],
           const Spacer(),
           ElevatedButton.icon(
             onPressed: widget.onCustomize,
@@ -180,7 +193,7 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
               style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: AppColors.accent,
               foregroundColor: Colors.white,
               elevation: 0,
               padding: EdgeInsets.symmetric(horizontal: 18.w),
@@ -191,6 +204,45 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _iconAction({
+    required IconData icon,
+    required Color color,
+    String? label,
+    bool busy = false,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: busy ? null : onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 6.h),
+        child: Row(
+          children: [
+            busy
+                ? SizedBox(
+                    width: 18.w,
+                    height: 18.w,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: color),
+                  )
+                : Icon(icon, size: 20.w, color: color),
+            if (label != null && label.isNotEmpty) ...[
+              SizedBox(width: 5.w),
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12.sp,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

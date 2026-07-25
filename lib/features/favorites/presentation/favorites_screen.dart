@@ -3,6 +3,8 @@ import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/shared/widgets/empty_state.dart';
+import 'package:status_maker/shared/widgets/app_shimmer.dart';
+import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/shared/widgets/saved_status_card.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
@@ -66,7 +68,7 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
 
   List<SavedStatus> _statuses = [];
   bool _loading = true;
-  String? _error;
+  bool _failed = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -80,7 +82,7 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
   Future<void> _load() async {
     setState(() {
       _loading = true;
-      _error = null;
+      _failed = false;
     });
     try {
       final items = await _repo.fetchMine();
@@ -89,16 +91,10 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
         _statuses = items;
         _loading = false;
       });
-    } on StatusRepositoryException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _loading = false;
-      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = S.t('feed_error_msg');
+        _failed = true;
         _loading = false;
       });
     }
@@ -110,12 +106,11 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
     setState(() => _statuses.removeWhere((s) => s.id == status.id));
     try {
       await _repo.delete(status.id);
-    } catch (e) {
+      if (mounted) AppSnackBar.success(context, S.t('deleted_ok'));
+    } catch (_) {
       if (!mounted) return;
       setState(() => _statuses = previous); // restore on failure
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(S.t('delete_failed'))),
-      );
+      AppSnackBar.error(context, S.t('something_wrong'));
     }
   }
 
@@ -137,13 +132,20 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
     super.build(context);
 
     if (_loading) {
-      return Center(child: CircularProgressIndicator(color: AppColors.accent));
+      return ListView.separated(
+        physics: const NeverScrollableScrollPhysics(),
+        padding: EdgeInsets.all(AppDimensions.paddingMedium),
+        itemCount: 3,
+        separatorBuilder: (_, __) =>
+            SizedBox(height: AppDimensions.paddingLarge),
+        itemBuilder: (_, __) => const StatusCardShimmer(),
+      );
     }
-    if (_error != null) {
+    if (_failed) {
       return EmptyState(
-        icon: Icons.wifi_off_rounded,
-        title: S.t('feed_error_title'),
-        message: _error!,
+        icon: Icons.cloud_off_rounded,
+        title: S.t('something_wrong'),
+        message: S.t('try_again_msg'),
         actionLabel: S.t('retry'),
         onAction: _load,
       );

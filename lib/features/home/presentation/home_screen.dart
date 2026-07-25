@@ -3,6 +3,7 @@ import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/shared/widgets/saved_status_card.dart';
+import 'package:status_maker/shared/widgets/app_shimmer.dart';
 import 'package:status_maker/shared/widgets/empty_state.dart';
 import 'package:status_maker/features/explore/presentation/explore_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
@@ -12,7 +13,11 @@ import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  /// Fires whenever the Home tab is (re)selected so the feed refreshes without
+  /// the user pulling down. Supplied by [MainLayout].
+  final Listenable? refreshSignal;
+
+  const HomeScreen({super.key, this.refreshSignal});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -32,12 +37,24 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _selected;
   List<SavedStatus> _statuses = [];
   bool _loading = true;
-  String? _error;
+  bool _failed = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    widget.refreshSignal?.addListener(_onFocus);
+  }
+
+  @override
+  void dispose() {
+    widget.refreshSignal?.removeListener(_onFocus);
+    super.dispose();
+  }
+
+  /// Called when the Home tab regains focus — silently refresh the feed.
+  void _onFocus() {
+    if (mounted && !_loading) _load();
   }
 
   /// Loads the PUBLIC feed (only creations users chose to Post), filtered by
@@ -45,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _load() async {
     setState(() {
       _loading = true;
-      _error = null;
+      _failed = false;
     });
     try {
       final items = await _repo.fetchPublic(category: _selected);
@@ -54,16 +71,10 @@ class _HomeScreenState extends State<HomeScreen> {
         _statuses = items;
         _loading = false;
       });
-    } on StatusRepositoryException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = e.message;
-        _loading = false;
-      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = S.t('feed_error_msg');
+        _failed = true;
         _loading = false;
       });
     }
@@ -104,21 +115,25 @@ class _HomeScreenState extends State<HomeScreen> {
       body: RefreshIndicator(
         color: AppColors.accent,
         onRefresh: _load,
-        child: SingleChildScrollView(
+        child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics()),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(height: AppDimensions.paddingSmall),
-              _buildCategories(),
-              SizedBox(height: AppDimensions.paddingLarge),
-              _buildSectionHeader(),
-              SizedBox(height: AppDimensions.paddingMedium),
-              _buildBody(context),
-              SizedBox(height: AppDimensions.paddingLarge),
-            ],
-          ),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(height: AppDimensions.paddingSmall),
+                  _buildCategories(),
+                  SizedBox(height: AppDimensions.paddingMedium),
+                ],
+              ),
+            ),
+            _buildSliverBody(context),
+            SliverToBoxAdapter(
+              child: SizedBox(height: AppDimensions.paddingLarge),
+            ),
+          ],
         ),
       ),
     );
@@ -235,98 +250,62 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSectionHeader() {
-    final title =
-        _selected == null ? S.t('community_feed') : S.cat(_selected!);
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 4.w,
-            height: 20.h,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: AppColors.accentGradient,
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-              borderRadius: BorderRadius.circular(4.r),
-            ),
-          ),
-          SizedBox(width: 10.w),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 18.sp,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const Spacer(),
-          if (!_loading && _error == null)
-            Text(
-              '${_statuses.length} ${S.t('designs')}',
-              style: TextStyle(
-                fontSize: 12.sp,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBody(BuildContext context) {
+  Widget _buildSliverBody(BuildContext context) {
+    // Loading — show a few shimmer cards so the screen has shape immediately.
     if (_loading) {
-      return Padding(
-        padding: EdgeInsets.symmetric(vertical: 80.h),
-        child: Center(
-          child: CircularProgressIndicator(color: AppColors.accent),
+      return SliverPadding(
+        padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
+        sliver: SliverList.separated(
+          itemCount: 3,
+          separatorBuilder: (_, __) =>
+              SizedBox(height: AppDimensions.paddingLarge),
+          itemBuilder: (_, __) => const StatusCardShimmer(),
         ),
       );
     }
-    if (_error != null) {
-      return Padding(
-        padding: EdgeInsets.symmetric(vertical: 40.h),
-        child: EmptyState(
-          icon: Icons.wifi_off_rounded,
-          title: S.t('feed_error_title'),
-          message: _error!,
-          actionLabel: S.t('retry'),
-          onAction: _load,
+
+    if (_failed) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 40.h),
+          child: EmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: S.t('something_wrong'),
+            message: S.t('try_again_msg'),
+            actionLabel: S.t('retry'),
+            onAction: _load,
+          ),
         ),
       );
     }
+
     if (_statuses.isEmpty) {
-      return Padding(
-        padding: EdgeInsets.symmetric(vertical: 40.h),
-        child: EmptyState(
-          icon: Icons.auto_awesome_outlined,
-          title: S.t('feed_empty_title'),
-          message: S.t('feed_empty_msg'),
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 40.h),
+          child: EmptyState(
+            icon: Icons.auto_awesome_outlined,
+            title: S.t('feed_empty_title'),
+            message: S.t('feed_empty_msg'),
+          ),
         ),
       );
     }
 
     final tag = _selected == null ? null : S.cat(_selected!);
-    return Padding(
+    return SliverPadding(
       padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
-      child: Column(
-        children: [
-          for (final status in _statuses) ...[
-            RepaintBoundary(
-              child: SavedStatusCard(
-                status: status,
-                tag: tag,
-                onCustomize: () => _openEditor(context, status),
-              ),
-            ),
+      sliver: SliverList.separated(
+        itemCount: _statuses.length,
+        separatorBuilder: (_, __) =>
             SizedBox(height: AppDimensions.paddingLarge),
-          ],
-        ],
+        itemBuilder: (context, i) => RepaintBoundary(
+          child: SavedStatusCard(
+            status: _statuses[i],
+            tag: tag,
+            onCustomize: () => _openEditor(context, _statuses[i]),
+          ),
+        ),
       ),
     );
   }

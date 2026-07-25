@@ -215,6 +215,12 @@ class S {
     'retry': ['Retry', 'फिर से करें'],
     'tag_public': ['Public', 'सार्वजनिक'],
     'tag_private': ['Private', 'निजी'],
+    'something_wrong': ['Something went wrong', 'कुछ गड़बड़ हो गई'],
+    'try_again_msg': [
+      'Please try again in a moment.',
+      'कृपया थोड़ी देर बाद फिर से प्रयास करें।'
+    ],
+    'deleted_ok': ['Deleted', 'डिलीट हो गया'],
 
     // home — community feed
     'community_feed': ['Community Feed', 'कम्युनिटी फ़ीड'],

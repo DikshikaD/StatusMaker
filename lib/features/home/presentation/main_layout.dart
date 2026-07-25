@@ -26,6 +26,15 @@ class _NavItem {
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
 
+  // Bumped each time the Home tab is (re)selected so its feed auto-refreshes.
+  final ValueNotifier<int> _homeTick = ValueNotifier<int>(0);
+
+  @override
+  void dispose() {
+    _homeTick.dispose();
+    super.dispose();
+  }
+
   // Built fresh on every build (see [build]) so that a theme or language change
   // recreates the tab widgets and they repaint with the new palette. Using a
   // cached/const list would keep the old colors on inactive tabs.
@@ -33,7 +42,7 @@ class _MainLayoutState extends State<MainLayout> {
         // Intentionally NOT const: const instances are canonicalized to the same
         // object, so IndexedStack would skip rebuilding them and inactive tabs
         // would keep the old theme colors.
-        HomeScreen(),
+        HomeScreen(refreshSignal: _homeTick),
         ExploreScreen(),
         CreateScreen(),
         FavoritesScreen(),
@@ -96,7 +105,11 @@ class _MainLayoutState extends State<MainLayout> {
     final selected = index == _currentIndex;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => setState(() => _currentIndex = index),
+      onTap: () {
+        setState(() => _currentIndex = index);
+        // Re-selecting Home refreshes its feed automatically.
+        if (index == 0) _homeTick.value++;
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeOutCubic,

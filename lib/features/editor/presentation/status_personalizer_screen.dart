@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/status_design.dart';
 import 'package:status_maker/features/editor/data/templates_data.dart';
@@ -219,11 +220,12 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     return captureCanvas(_canvasKey);
   }
 
-  void _snack(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), duration: const Duration(seconds: 2)),
-    );
+  void _ok(String msg) {
+    if (mounted) AppSnackBar.success(context, msg);
+  }
+
+  void _fail(String msg) {
+    if (mounted) AppSnackBar.error(context, msg);
   }
 
   /// A short title for the saved row — the first line of text on the canvas,
@@ -259,9 +261,8 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     try {
       final bytes = await _capture();
       if (bytes == null) return;
-      // 1) Keep the existing device export.
-      final path = await saveToFile(bytes);
-      _snack('${S.t('saved_device')}\n$path');
+      // 1) Keep the existing device export (silent — the cloud save reports).
+      await saveToFile(bytes);
       // 2) Persist the editable design to the cloud (private).
       await _cloudSave(bytes: bytes, makePublic: false);
     } finally {
@@ -296,11 +297,10 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         remixOf: _statusId == null ? widget.remixOf : null,
       );
       _statusId = saved.id;
-      _snack(makePublic ? S.t('posted_public') : S.t('saved_cloud'));
-    } on StatusRepositoryException catch (e) {
-      _snack(e.message);
+      _ok(makePublic ? S.t('posted_public') : S.t('saved_cloud'));
     } catch (_) {
-      _snack(S.t('save_failed'));
+      // Never surface raw backend errors to users — keep it friendly.
+      _fail(S.t('something_wrong'));
     }
   }
 
