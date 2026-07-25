@@ -5,6 +5,7 @@ import 'core/theme/app_theme.dart';
 import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 import 'package:status_maker/features/splash/presentation/splash_screen.dart';
 
@@ -14,6 +15,9 @@ Future<void> main() async {
   // These are tiny, fast SharedPreferences reads.
   await S.init();
   await ThemeController.init();
+  // Connect to the backend and ensure a (anonymous) session. No-ops safely
+  // until real credentials are added to SupabaseConfig, so startup never breaks.
+  await SupabaseService.init();
 
   runApp(const MyApp());
 

@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/template_motif.dart';
+import 'package:status_maker/features/editor/utils/canvas_image.dart';
 import 'package:status_maker/features/editor/widgets/motif_painter.dart';
 
 /// Renders the status background: a gallery image, a built-in gradient, or a
@@ -24,10 +24,9 @@ class TemplateBackground extends StatelessWidget {
         errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0F172A)),
       );
     } else if (state.isImage) {
-      bg = Image.file(
-        File(state.imagePath!),
+      bg = canvasImage(
+        state.imagePath!,
         fit: BoxFit.cover,
-        gaplessPlayback: true,
         errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF0F172A)),
       );
     } else if (state.isGradient) {

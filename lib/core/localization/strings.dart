@@ -198,6 +198,36 @@ class S {
     // editor / common actions
     'save': ['Save', 'सेव'],
     'share': ['Share', 'शेयर'],
+    'post': ['Post', 'पोस्ट'],
+    'saved_cloud': ['Saved to your creations', 'आपकी रचनाओं में सेव हो गया'],
+    'posted_public': [
+      'Posted! It\'s now on the community feed.',
+      'पोस्ट हो गया! अब यह कम्युनिटी फ़ीड में है।'
+    ],
+    'save_failed': [
+      'Couldn\'t save. Please try again.',
+      'सेव नहीं हो सका। कृपया फिर से प्रयास करें।'
+    ],
+    'delete_failed': [
+      'Couldn\'t delete. Please try again.',
+      'डिलीट नहीं हो सका। कृपया फिर से प्रयास करें।'
+    ],
+    'retry': ['Retry', 'फिर से करें'],
+    'tag_public': ['Public', 'सार्वजनिक'],
+    'tag_private': ['Private', 'निजी'],
+
+    // home — community feed
+    'community_feed': ['Community Feed', 'कम्युनिटी फ़ीड'],
+    'feed_empty_title': ['No posts yet', 'अभी कोई पोस्ट नहीं'],
+    'feed_empty_msg': [
+      'Create a status and tap Post to share it with everyone here.',
+      'एक स्टेटस बनाएँ और सबके साथ शेयर करने के लिए पोस्ट पर टैप करें।'
+    ],
+    'feed_error_title': ['Couldn\'t load feed', 'फ़ीड लोड नहीं हो सका'],
+    'feed_error_msg': [
+      'Something went wrong. Pull down to refresh.',
+      'कुछ गड़बड़ हो गई। रिफ़्रेश करने के लिए नीचे खींचें।'
+    ],
     'background': ['Background', 'बैकग्राउंड'],
     'photo': ['Photo', 'फ़ोटो'],
     'text': ['Text', 'टेक्स्ट'],

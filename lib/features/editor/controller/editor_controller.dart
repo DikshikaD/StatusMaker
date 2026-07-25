@@ -288,6 +288,36 @@ class EditorController extends ChangeNotifier {
     super.dispose();
   }
 
+  /// Replaces the entire canvas with a previously saved design. Used when the
+  /// user opens one of their statuses, or remixes someone else's shared status
+  /// (the caller supplies a fresh copy so the original is never mutated).
+  void loadDesign({
+    required BackgroundState background,
+    required List<TextObject> texts,
+    required List<ImageObject> images,
+    required List<ElementObject> elements,
+    StatusFrame frame = StatusFrame.none,
+    Color frameColor = Colors.white,
+    double frameWidth = 1.0,
+  }) {
+    _background = background;
+    _texts
+      ..clear()
+      ..addAll(texts);
+    _images
+      ..clear()
+      ..addAll(images);
+    _elements
+      ..clear()
+      ..addAll(elements);
+    _frame = frame;
+    _frameColor = frameColor;
+    _frameWidth = frameWidth;
+    selectedId.value = null;
+    editRequest.value = null;
+    notifyListeners();
+  }
+
   // ---- Background -----------------------------------------------------------
   void setBackground(BackgroundState bg) {
     _background = bg;

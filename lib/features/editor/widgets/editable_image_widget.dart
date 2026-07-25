@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
+import 'package:status_maker/features/editor/utils/canvas_image.dart';
 import 'package:status_maker/features/editor/widgets/heart_clipper.dart';
 import 'package:status_maker/features/editor/widgets/transformable_object.dart';
 
@@ -69,12 +69,11 @@ class EditableImageWidget extends StatelessWidget {
               ],
             ),
           )
-        : Image.file(
-            File(image.path),
+        : canvasImage(
+            image.path,
             width: size.width,
             height: size.height,
             fit: BoxFit.cover,
-            gaplessPlayback: true,
             // Decode only at the resolution actually shown on screen instead of
             // the full camera resolution — massively lowers memory per photo.
             cacheWidth: (size.width * 2).round().clamp(1, 2000),

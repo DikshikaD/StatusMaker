@@ -21,6 +21,9 @@ dependencies:
   # Image handling
   image_picker: ^1.1.2
 
+  # Backend (auth, database, storage)
+  supabase_flutter: ^2.12.4
+
   # Save & Share (canvas export)
   path_provider: ^2.1.0
   share_plus: ^10.0.0

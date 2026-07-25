@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
-import 'package:status_maker/shared/widgets/status_card.dart';
+import 'package:status_maker/shared/widgets/saved_status_card.dart';
+import 'package:status_maker/shared/widgets/empty_state.dart';
 import 'package:status_maker/features/explore/presentation/explore_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
-import 'package:status_maker/features/editor/data/templates_data.dart';
+import 'package:status_maker/features/statuses/data/saved_status.dart';
+import 'package:status_maker/features/statuses/data/status_repository.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
@@ -25,11 +27,52 @@ class _HomeScreenState extends State<HomeScreen> {
     {'icon': Icons.favorite_border, 'name': 'Love'},
   ];
 
-  String? _selected;
+  final StatusRepository _repo = StatusRepository();
 
-  // Pseudo like counts so cards feel alive (display only).
-  static const _likeLabels = ['2.4k', '1.2k', '980', '3.1k', '760', '1.8k',
-    '540', '2.0k'];
+  String? _selected;
+  List<SavedStatus> _statuses = [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  /// Loads the PUBLIC feed (only creations users chose to Post), filtered by
+  /// the selected category chip.
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final items = await _repo.fetchPublic(category: _selected);
+      if (!mounted) return;
+      setState(() {
+        _statuses = items;
+        _loading = false;
+      });
+    } on StatusRepositoryException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = S.t('feed_error_msg');
+        _loading = false;
+      });
+    }
+  }
+
+  void _selectCategory(String? name) {
+    setState(() => _selected = name);
+    _load();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,62 +96,29 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.notifications_none),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(S.t('youre_caught_up')),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            },
+            icon: const Icon(Icons.refresh),
+            onPressed: _loading ? null : _load,
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(height: AppDimensions.paddingSmall),
-            _buildCategories(),
-            SizedBox(height: AppDimensions.paddingLarge),
-            // Smoothly cross-fade + slide the header and feed when the
-            // selected category changes.
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 350),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0.05, 0.02),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  ),
-                );
-              },
-              layoutBuilder: (currentChild, previousChildren) => Stack(
-                alignment: Alignment.topCenter,
-                children: [
-                  ...previousChildren,
-                  if (currentChild != null) currentChild,
-                ],
-              ),
-              child: Column(
-                key: ValueKey(_selected ?? '_all'),
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionHeader(),
-                  SizedBox(height: AppDimensions.paddingMedium),
-                  _buildFeed(context),
-                ],
-              ),
-            ),
-          ],
+      body: RefreshIndicator(
+        color: AppColors.accent,
+        onRefresh: _load,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics()),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(height: AppDimensions.paddingSmall),
+              _buildCategories(),
+              SizedBox(height: AppDimensions.paddingLarge),
+              _buildSectionHeader(),
+              SizedBox(height: AppDimensions.paddingMedium),
+              _buildBody(context),
+              SizedBox(height: AppDimensions.paddingLarge),
+            ],
+          ),
         ),
       ),
     );
@@ -121,11 +131,8 @@ class _HomeScreenState extends State<HomeScreen> {
         scrollDirection: Axis.horizontal,
         padding:
             EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
-        // +1 for the leading "All" chip.
         itemCount: _categories.length + 1,
         itemBuilder: (context, index) {
-          // Builder gives each chip its own context so the row can slide it
-          // into view when tapped.
           return Builder(
             builder: (chipContext) {
               if (index == 0) {
@@ -134,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   label: S.t('all'),
                   isActive: _selected == null,
                   onTap: () {
-                    setState(() => _selected = null);
+                    _selectCategory(null);
                     _centerChip(chipContext);
                   },
                 );
@@ -146,8 +153,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: S.cat(name),
                 isActive: name == _selected,
                 onTap: () {
-                  setState(() =>
-                      _selected = _selected == name ? null : name);
+                  _selectCategory(_selected == name ? null : name);
                   _centerChip(chipContext);
                 },
               );
@@ -158,7 +164,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Smoothly slides the tapped chip toward the centre of the row.
   void _centerChip(BuildContext chipContext) {
     Scrollable.ensureVisible(
       chipContext,
@@ -184,46 +189,46 @@ class _HomeScreenState extends State<HomeScreen> {
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutBack,
           child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 9.h),
-          decoration: BoxDecoration(
-            gradient: isActive
-                ? const LinearGradient(colors: AppColors.accentGradient)
-                : null,
-            color: isActive ? null : AppColors.surface,
-            borderRadius: BorderRadius.circular(24.r),
-            border: Border.all(
-              color: isActive ? Colors.transparent : AppColors.border,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 9.h),
+            decoration: BoxDecoration(
+              gradient: isActive
+                  ? const LinearGradient(colors: AppColors.accentGradient)
+                  : null,
+              color: isActive ? null : AppColors.surface,
+              borderRadius: BorderRadius.circular(24.r),
+              border: Border.all(
+                color: isActive ? Colors.transparent : AppColors.border,
+              ),
+              boxShadow: isActive
+                  ? [
+                      BoxShadow(
+                        color: AppColors.accent.withValues(alpha: 0.35),
+                        blurRadius: 12.r,
+                        offset: Offset(0, 4.h),
+                      ),
+                    ]
+                  : null,
             ),
-            boxShadow: isActive
-                ? [
-                    BoxShadow(
-                      color: AppColors.accent.withValues(alpha: 0.35),
-                      blurRadius: 12.r,
-                      offset: Offset(0, 4.h),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 18.w,
-                color: isActive ? Colors.white : AppColors.accent,
-              ),
-              SizedBox(width: 7.w),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.w700,
-                  color: isActive ? Colors.white : AppColors.textPrimary,
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 18.w,
+                  color: isActive ? Colors.white : AppColors.accent,
                 ),
-              ),
-            ],
-          ),
+                SizedBox(width: 7.w),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w700,
+                    color: isActive ? Colors.white : AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -232,8 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSectionHeader() {
     final title =
-        _selected == null ? S.t('popular_templates') : S.cat(_selected!);
-    final count = templatesForCategory(_selected).length;
+        _selected == null ? S.t('community_feed') : S.cat(_selected!);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
       child: Row(
@@ -261,37 +265,63 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const Spacer(),
-          Text(
-            '$count ${S.t('designs')}',
-            style: TextStyle(
-              fontSize: 12.sp,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+          if (!_loading && _error == null)
+            Text(
+              '${_statuses.length} ${S.t('designs')}',
+              style: TextStyle(
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildFeed(BuildContext context) {
-    final templates = templatesForCategory(_selected);
-    final tag = _selected == null ? null : S.cat(_selected!);
+  Widget _buildBody(BuildContext context) {
+    if (_loading) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: 80.h),
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.accent),
+        ),
+      );
+    }
+    if (_error != null) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: 40.h),
+        child: EmptyState(
+          icon: Icons.wifi_off_rounded,
+          title: S.t('feed_error_title'),
+          message: _error!,
+          actionLabel: S.t('retry'),
+          onAction: _load,
+        ),
+      );
+    }
+    if (_statuses.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(vertical: 40.h),
+        child: EmptyState(
+          icon: Icons.auto_awesome_outlined,
+          title: S.t('feed_empty_title'),
+          message: S.t('feed_empty_msg'),
+        ),
+      );
+    }
 
+    final tag = _selected == null ? null : S.cat(_selected!);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
       child: Column(
         children: [
-          for (var i = 0; i < templates.length; i++) ...[
-            // Each card paints a gradient + CustomPaint motif + styled text.
-            // Isolating it in its own layer means scrolling or one card's
-            // press/like animation never repaints the others.
+          for (final status in _statuses) ...[
             RepaintBoundary(
-              child: StatusCard(
-                template: templates[i],
+              child: SavedStatusCard(
+                status: status,
                 tag: tag,
-                likes: _likeLabels[i % _likeLabels.length],
-                onCustomize: () => _openEditor(context, templates[i]),
+                onCustomize: () => _openEditor(context, status),
               ),
             ),
             SizedBox(height: AppDimensions.paddingLarge),
@@ -301,14 +331,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _openEditor(BuildContext context, StatusTemplate template) {
+  void _openEditor(BuildContext context, SavedStatus status) {
     Navigator.push(
       context,
       FadeSlidePageRoute(
         page: StatusPersonalizerScreen(
-          templateName: 'Template',
-          category: _selected ?? '',
-          template: template,
+          templateName: status.title ?? 'Status',
+          category: status.category ?? '',
+          initialDesign: status.toDesign(),
+          remixOf: status.id,
         ),
       ),
     );
