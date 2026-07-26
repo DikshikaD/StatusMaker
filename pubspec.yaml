@@ -45,6 +45,7 @@ flutter:
     - assets/categories/love/
     - assets/categories/festival/
     - assets/categories/birthday/
+    - assets/categories/bhakti/
     - assets/backgrounds/morning/
     - assets/backgrounds/love/
     - assets/backgrounds/birthday/
@@ -53,3 +54,4 @@ flutter:
     - assets/backgrounds/devotional/
     - assets/backgrounds/goodnight/
     - assets/backgrounds/general/
+    - assets/stickers/

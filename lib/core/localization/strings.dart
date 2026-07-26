@@ -110,6 +110,12 @@ class S {
     'search_hint': ['Search templates...', 'टेम्पलेट खोजें...'],
     'more_soon': ['More options coming soon', 'और विकल्प जल्द आ रहे हैं'],
     'filters_soon': ['Filters coming soon', 'फ़िल्टर जल्द आ रहे हैं'],
+    'no_results_title': ['No matches found', 'कोई नतीजा नहीं मिला'],
+    'no_results_msg': [
+      'Try a different word, or tap a trending search above.',
+      'कोई और शब्द आज़माएँ, या ऊपर किसी ट्रेंडिंग खोज पर टैप करें।'
+    ],
+    'results_for': ['Results for', 'के लिए नतीजे'],
 
     // create
     'create_title': ['Create', 'बनाएँ'],
@@ -196,6 +202,8 @@ class S {
     'opening_drafts': ['Opening drafts…', 'ड्राफ़्ट खुल रहे हैं…'],
 
     // editor / common actions
+    'undo': ['Undo', 'पूर्ववत करें'],
+    'redo': ['Redo', 'फिर से करें'],
     'save': ['Save', 'सेव'],
     'share': ['Share', 'शेयर'],
     'post': ['Post', 'पोस्ट'],
@@ -268,6 +276,14 @@ class S {
     'circle': ['Circle', 'गोल'],
     'oval': ['Oval', 'अंडाकार'],
     'heart': ['Heart', 'दिल'],
+    'adjust': ['Adjust', 'एडजस्ट'],
+    'reposition_photo': ['Reposition Photo', 'फ़ोटो पुनः स्थिति'],
+    'reposition_hint': [
+      'Drag to move • Pinch to zoom',
+      'खिसकाने के लिए ड्रैग करें • ज़ूम के लिए पिंच करें'
+    ],
+    'reset': ['Reset', 'रीसेट'],
+    'done': ['Done', 'हो गया'],
 
     // editor — background sheet
     'presets': ['Presets', 'प्रीसेट'],
@@ -280,10 +296,13 @@ class S {
     'festival': ['Festival', 'त्योहार'],
     'love': ['Love', 'प्यार'],
     'birthday': ['Birthday', 'जन्मदिन'],
+    'bhakti': ['Bhakti', 'भक्ति'],
 
     // editor — elements & frames
     'elements': ['Elements', 'एलिमेंट्स'],
     'shapes': ['Shapes', 'आकार'],
+    'stickers': ['Stickers', 'स्टिकर्स'],
+    'drawn_stickers': ['Drawn stickers', 'ड्रॉन स्टिकर्स'],
     'frames': ['Frames', 'फ्रेम'],
     'frame': ['Frame', 'फ्रेम'],
     'width': ['Width', 'चौड़ाई'],

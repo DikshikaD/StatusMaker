@@ -10,6 +10,7 @@ import 'package:status_maker/features/editor/data/status_design.dart';
 import 'package:status_maker/features/editor/data/templates_data.dart';
 import 'package:status_maker/features/editor/utils/editor_export.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
+import 'package:status_maker/features/editor/presentation/photo_reposition_screen.dart';
 import 'package:status_maker/features/editor/widgets/status_canvas.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/add_bar.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/text_toolbar.dart';
@@ -75,6 +76,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         // Reopen a saved creation exactly as it was — fully editable.
         design.applyTo(_controller);
         _controller.clearSelection();
+        // Undo should only ever revert the user's own edits from here on,
+        // never back into "before the saved design was loaded".
+        _controller.clearHistory();
         return;
       }
       if (t != null) {
@@ -115,6 +119,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         ));
       }
       _controller.clearSelection();
+      // Same as above — the initial template/blank-canvas setup shouldn't be
+      // something the user can "undo" back into.
+      _controller.clearHistory();
 
       // Straight after the canvas is ready, surface category-matched quotes
       // so the user can start from a ready-made line.
@@ -161,6 +168,36 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     if (x != null) _controller.fillImage(id, x.path);
   }
 
+  /// Opens the pan/zoom adjuster for [id]'s photo — lets the user fix a crop
+  /// that's cutting off the part of the photo they actually wanted visible.
+  Future<void> _adjustPhoto(String id) async {
+    ImageObject? found;
+    for (final i in _controller.images) {
+      if (i.id == id) {
+        found = i;
+        break;
+      }
+    }
+    if (found == null || found.path.isEmpty) return;
+    // Rebind to a non-nullable `final` — Dart won't keep a nullable local
+    // promoted once it's captured inside the `builder:` closure below.
+    final image = found;
+    final result = await Navigator.push<PhotoAdjustResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PhotoRepositionScreen(image: image),
+        fullscreenDialog: true,
+      ),
+    );
+    if (result != null) {
+      _controller.setImagePhotoAdjust(
+        id,
+        offset: result.offset,
+        scale: result.scale,
+      );
+    }
+  }
+
   void _showElementsSheet() {
     showModalBottomSheet(
       context: context,
@@ -169,8 +206,8 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       builder: (_) => ElementsSheet(
         currentFrame: _controller.frame,
         currentFrameWidth: _controller.frameWidth,
-        onAddElement: (shape, color) =>
-            _controller.addElement(shape, color: color),
+        onAddElement: (shape, color, assetPath) =>
+            _controller.addElement(shape, color: color, assetPath: assetPath),
         onSetFrame: (frame, color, width) =>
             _controller.setFrame(frame, color: color, width: width),
         onFrameWidth: _controller.setFrameWidth,
@@ -373,38 +410,90 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   }
 
   Widget _topBar() {
+    // Back + Undo + Redo + 3 action pills is a lot to fit on one row. Text
+    // labels on the pills only reliably fit on large screens (tablets) —
+    // on a normal phone width they're the difference between this row and
+    // an overflow, so this measures the row's own available width instead of
+    // guessing from screen size, and drops to icon-only pills (still fully
+    // functional, with a Tooltip for discoverability) whenever labels
+    // wouldn't fit.
     return Padding(
       padding: EdgeInsets.fromLTRB(8.w, 6.h, 12.w, 6.h),
-      child: Row(
-        children: [
-          IconButton(
-            icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
-            onPressed: () => Navigator.of(context).maybePop(),
-          ),
-          const Spacer(),
-          _pill(
-            label: S.t('save'),
-            icon: Icons.download_rounded,
-            filled: false,
-            onTap: _busy ? null : _onSave,
-          ),
-          SizedBox(width: 8.w),
-          _pill(
-            label: S.t('post'),
-            icon: Icons.public,
-            filled: false,
-            busy: _busy,
-            onTap: _busy ? null : _onPost,
-          ),
-          SizedBox(width: 8.w),
-          _pill(
-            label: S.t('share'),
-            icon: Icons.ios_share,
-            filled: true,
-            onTap: _busy ? null : _share,
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showLabels = constraints.maxWidth >= 430.w;
+          return Row(
+            children: [
+              _iconBtn(
+                Icons.arrow_back,
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+              // Rebuilds on every controller change so the enabled/disabled
+              // state always matches whether there's anything to undo/redo.
+              AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) => Row(
+                  children: [
+                    _iconBtn(
+                      Icons.undo,
+                      tooltip: S.t('undo'),
+                      onPressed: _controller.canUndo ? _controller.undo : null,
+                    ),
+                    _iconBtn(
+                      Icons.redo,
+                      tooltip: S.t('redo'),
+                      onPressed: _controller.canRedo ? _controller.redo : null,
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              _pill(
+                label: S.t('save'),
+                icon: Icons.download_rounded,
+                filled: false,
+                showLabel: showLabels,
+                onTap: _busy ? null : _onSave,
+              ),
+              SizedBox(width: 6.w),
+              _pill(
+                label: S.t('post'),
+                icon: Icons.public,
+                filled: false,
+                showLabel: showLabels,
+                busy: _busy,
+                onTap: _busy ? null : _onPost,
+              ),
+              SizedBox(width: 6.w),
+              _pill(
+                label: S.t('share'),
+                icon: Icons.ios_share,
+                filled: true,
+                showLabel: showLabels,
+                onTap: _busy ? null : _share,
+              ),
+            ],
+          );
+        },
       ),
+    );
+  }
+
+  /// Compact icon button for the top bar (back/undo/redo) — smaller than
+  /// Flutter's default 48dp IconButton so five of them plus three pills can
+  /// actually share one row on a phone-width screen.
+  Widget _iconBtn(
+    IconData icon, {
+    required VoidCallback? onPressed,
+    String? tooltip,
+  }) {
+    return IconButton(
+      icon: Icon(icon, color: AppColors.textPrimary, size: 20.w),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints(minWidth: 40.w, minHeight: 40.w),
+      visualDensity: VisualDensity.compact,
     );
   }
 
@@ -414,45 +503,51 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     required bool filled,
     required VoidCallback? onTap,
     bool busy = false,
+    bool showLabel = true,
   }) {
     final disabled = onTap == null;
+    final content = Container(
+      padding: EdgeInsets.symmetric(
+          horizontal: showLabel ? 14.w : 10.w, vertical: 9.h),
+      decoration: BoxDecoration(
+        color: filled ? AppColors.accent : AppColors.cardLight,
+        borderRadius: BorderRadius.circular(30.r),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (busy)
+            SizedBox(
+              width: 18.w,
+              height: 18.w,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: filled ? Colors.white : AppColors.textPrimary,
+              ),
+            )
+          else
+            Icon(icon,
+                size: 18.w,
+                color: filled ? Colors.white : AppColors.textPrimary),
+          if (showLabel) ...[
+            SizedBox(width: 6.w),
+            Text(
+              label,
+              style: TextStyle(
+                  color: filled ? Colors.white : AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14.sp),
+            ),
+          ],
+        ],
+      ),
+    );
     return Opacity(
       opacity: disabled && !busy ? 0.5 : 1.0,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 9.h),
-          decoration: BoxDecoration(
-            color: filled ? AppColors.accent : AppColors.cardLight,
-            borderRadius: BorderRadius.circular(30.r),
-          ),
-          child: Row(
-            children: [
-              if (busy)
-                SizedBox(
-                  width: 18.w,
-                  height: 18.w,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: filled ? Colors.white : AppColors.textPrimary,
-                  ),
-                )
-              else
-                Icon(icon,
-                    size: 18.w,
-                    color: filled ? Colors.white : AppColors.textPrimary),
-              SizedBox(width: 6.w),
-              Text(
-                label,
-                style: TextStyle(
-                    color: filled ? Colors.white : AppColors.textPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14.sp),
-              ),
-            ],
-          ),
-        ),
+        child: showLabel ? content : Tooltip(message: label, child: content),
       ),
     );
   }
@@ -482,6 +577,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
             onReplace: () => _replaceImage(img.id),
             onToggleFrame: () =>
                 _controller.setImageFrame(img.id, framed: !img.framed),
+            onAdjust: img.isPlaceholder || img.path.isEmpty
+                ? null
+                : () => _adjustPhoto(img.id),
           );
         } else if (el != null) {
           key = 'element';

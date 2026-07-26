@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:status_maker/core/constants/app_assets.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/background_images.dart';
+import 'package:status_maker/features/editor/data/asset_backgrounds.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
 /// Built-in backgrounds — solid colours and gradients. No assets needed.
@@ -28,18 +28,15 @@ const List<BackgroundState> kBackgroundPresets = [
 /// Applied by the "None" tile to clear any picked image back to a plain colour.
 const BackgroundState kNoBackground = BackgroundState(color: Color(0xFF0F172A));
 
-/// Image background categories, each with its bundled asset paths.
-class BackgroundCategory {
-  final String labelKey;
-  final List<String> assets;
-  const BackgroundCategory(this.labelKey, this.assets);
-}
-
-const List<BackgroundCategory> kBackgroundCategories = [
-  BackgroundCategory('morning', AppAssets.morningBackgrounds),
-  BackgroundCategory('festival', AppAssets.festivalBackgrounds),
-  BackgroundCategory('love', AppAssets.loveBackgrounds),
-  BackgroundCategory('birthday', AppAssets.birthdayBackgrounds),
+/// Labelled asset-image categories shown in the sheet. Each pairs an
+/// `assets/categories/<folder>/` folder with a localized label key. Files are
+/// listed at runtime, so dropping new images into a folder shows them here.
+const List<(String folder, String labelKey)> _imageCategories = [
+  ('bhakti', 'bhakti'),
+  ('morning', 'morning'),
+  ('love', 'love'),
+  ('festival', 'festival'),
+  ('birthday', 'birthday'),
 ];
 
 class BackgroundSheet extends StatefulWidget {
@@ -62,6 +59,23 @@ class BackgroundSheet extends StatefulWidget {
 
 class _BackgroundSheetState extends State<BackgroundSheet> {
   int _tab = 0; // 0 = presets, 1 = gallery
+
+  // Asset image paths per category folder, loaded from the asset manifest.
+  final Map<String, List<String>> _catAssets = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategoryAssets();
+  }
+
+  Future<void> _loadCategoryAssets() async {
+    for (final entry in _imageCategories) {
+      final paths = await categoryBackgroundAssets(entry.$1);
+      if (paths.isNotEmpty) _catAssets[entry.$1] = paths;
+    }
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -141,8 +155,8 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Category-matched real photo backgrounds (10+). Loaded from the
-        // network with a soft scrim applied on the canvas for text legibility.
+        // Category-matched designed backgrounds (bundled). A soft scrim is
+        // applied on the canvas so overlaid text stays readable.
         _sectionHeader(S.t('photo_backgrounds')),
         _grid([
           for (final path in backgroundImagesForCategory(widget.category))
@@ -155,12 +169,15 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
           _noneTile(),
           for (final bg in kBackgroundPresets) _colorTile(bg),
         ]),
-        // Any bundled asset image categories (may be empty).
-        for (final cat in kBackgroundCategories)
-          if (cat.assets.isNotEmpty) ...[
+        // Bundled asset image categories (Bhakti, Morning, Love, …). Listed
+        // dynamically, so any images added to the folders appear automatically.
+        for (final entry in _imageCategories)
+          if ((_catAssets[entry.$1] ?? const []).isNotEmpty) ...[
             SizedBox(height: 20.h),
-            _sectionHeader(S.t(cat.labelKey)),
-            _grid([for (final path in cat.assets) _assetTile(path)]),
+            _sectionHeader(S.t(entry.$2)),
+            _grid([
+              for (final path in _catAssets[entry.$1]!) _assetTile(path),
+            ]),
           ],
       ],
     );
@@ -231,6 +248,9 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
           child: Image.asset(
             path,
             fit: BoxFit.cover,
+            gaplessPlayback: true,
+            // Decode at ~tile resolution, not full size — lighter grid.
+            cacheWidth: 300,
             errorBuilder: (_, __, ___) =>
                 ColoredBox(color: AppColors.cardLight),
           ),

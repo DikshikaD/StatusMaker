@@ -4,7 +4,6 @@ import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/features/category/presentation/category_screen.dart';
-import 'package:status_maker/features/preview/presentation/status_preview_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
@@ -34,15 +33,6 @@ class CreateScreen extends StatelessWidget {
             ),
             SizedBox(height: AppDimensions.paddingMedium),
             _buildThemeGrid(context),
-
-            SizedBox(height: AppDimensions.paddingXLarge),
-
-            Text(
-              S.t('popular_templates'),
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            SizedBox(height: AppDimensions.paddingMedium),
-            _buildPopularTemplates(context),
           ],
         ),
       ),
@@ -172,84 +162,4 @@ class CreateScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPopularTemplates(BuildContext context) {
-    return SizedBox(
-      height: 220.h,
-      child: ListView(
-        physics: const BouncingScrollPhysics(),
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        children: [
-          _buildTemplateCard(context, 'Glass Morph', 'Minimalist text with glass effect', 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2000&auto=format&fit=crop'),
-          SizedBox(width: 16.w),
-          _buildTemplateCard(context, 'Minimalist Texts', 'Clean & simple layouts', 'https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?q=80&w=2000&auto=format&fit=crop'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTemplateCard(BuildContext context, String title, String subtitle, String imageUrl) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          FadeSlidePageRoute(page: StatusPreviewScreen(imageUrl: imageUrl)),
-        );
-      },
-      child: Container(
-      width: 160.w,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-        color: AppColors.cardLight,
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              // Cards are only ~160px wide; decode small instead of at 2000px.
-              cacheWidth: 500,
-              frameBuilder: (context, child, frame, wasSync) {
-                if (wasSync) return child;
-                return AnimatedOpacity(
-                  opacity: frame == null ? 0 : 1,
-                  duration: const Duration(milliseconds: 250),
-                  child: child,
-                );
-              },
-              loadingBuilder: (context, child, progress) => progress == null
-                  ? child
-                  : Container(color: AppColors.cardLight),
-              errorBuilder: (_, __, ___) => Icon(Icons.broken_image, color: AppColors.border),
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
-              ),
-            ),
-            padding: EdgeInsets.all(12.w),
-            alignment: Alignment.bottomLeft,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14.sp)),
-                SizedBox(height: 4.h),
-                Text(subtitle, style: TextStyle(color: Colors.white70, fontSize: 11.sp)),
-              ],
-            ),
-          ),
-        ],
-      ),
-      ),
-    );
-  }
 }

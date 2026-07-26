@@ -152,81 +152,97 @@ class _TransformableObjectState extends State<TransformableObject> {
     return Positioned(
       left: _position.dx,
       top: _position.dy,
-      child: Transform.rotate(
-        angle: _rotation,
-        child: Transform.scale(
-          scale: _scale,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onSelect,
-            onDoubleTap: widget.onDoubleTap,
-            onScaleStart: _onScaleStart,
-            onScaleUpdate: _onScaleUpdate,
-            onScaleEnd: _onScaleEnd,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                // Content, inset by _pad so the corner handles land inside the
-                // Stack's bounds (and therefore stay tappable).
-                Padding(
-                  padding: const EdgeInsets.all(_pad),
-                  child: Container(key: _contentKey, child: widget.child),
-                ),
-                if (widget.isSelected) ...[
-                  Positioned(
-                    left: _pad,
-                    top: _pad,
-                    right: _pad,
-                    bottom: _pad,
-                    child: IgnorePointer(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border:
-                              Border.all(color: AppColors.accent, width: 1.5),
-                          borderRadius: BorderRadius.circular(4),
+      // Gives this object its own compositing layer, so dragging/pinching it
+      // repaints only itself — not every other image/text/element sharing the
+      // canvas's outer RepaintBoundary. This is what makes moving one object
+      // smooth regardless of how many other objects are on the canvas.
+      child: RepaintBoundary(
+        child: Transform.rotate(
+          angle: _rotation,
+          child: Transform.scale(
+            scale: _scale,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onSelect,
+              onDoubleTap: widget.onDoubleTap,
+              onScaleStart: _onScaleStart,
+              onScaleUpdate: _onScaleUpdate,
+              onScaleEnd: _onScaleEnd,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Content, inset by _pad so the corner handles land inside
+                  // the Stack's bounds (and therefore stay tappable).
+                  Padding(
+                    padding: const EdgeInsets.all(_pad),
+                    child: Container(key: _contentKey, child: widget.child),
+                  ),
+                  if (widget.isSelected) ...[
+                    Positioned(
+                      left: _pad,
+                      top: _pad,
+                      right: _pad,
+                      bottom: _pad,
+                      child: IgnorePointer(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                                color: AppColors.accent, width: 1.5),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  // delete — top-left
-                  _corner(
-                    left: 2,
-                    top: 2,
-                    inv: inv,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: widget.onDelete,
-                      child: _handle(Icons.close, Colors.redAccent),
+                    // delete — top-left. Uses a raw pointer-down instead of
+                    // onTap: this handle sits inside the same GestureDetector
+                    // subtree as the parent's onScaleStart/Update/End (used to
+                    // move/pinch the whole object), so a tap here also enters
+                    // the same gesture arena as that pan/scale recognizer. On
+                    // a small 28x28 target, even a pixel of finger jitter
+                    // during the tap can cross the touch-slop threshold and
+                    // let the parent's scale recognizer win instead — the
+                    // "delete" silently turns into a tiny nudge. A Listener
+                    // fires unconditionally on the raw pointer event, so it
+                    // can't lose that race.
+                    _corner(
+                      left: 2,
+                      top: 2,
+                      inv: inv,
+                      child: Listener(
+                        behavior: HitTestBehavior.opaque,
+                        onPointerDown: (_) => widget.onDelete(),
+                        child: _handle(Icons.close, Colors.redAccent),
+                      ),
                     ),
-                  ),
-                  // rotate — top-right
-                  _corner(
-                    right: 2,
-                    top: 2,
-                    inv: inv,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onPanStart: _onRotateStart,
-                      onPanUpdate: _onRotateUpdate,
-                      onPanEnd: _onHandleEnd,
-                      child: _handle(Icons.rotate_right, AppColors.accent),
+                    // rotate — top-right
+                    _corner(
+                      right: 2,
+                      top: 2,
+                      inv: inv,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanStart: _onRotateStart,
+                        onPanUpdate: _onRotateUpdate,
+                        onPanEnd: _onHandleEnd,
+                        child: _handle(Icons.rotate_right, AppColors.accent),
+                      ),
                     ),
-                  ),
-                  // resize — bottom-right
-                  _corner(
-                    right: 2,
-                    bottom: 2,
-                    inv: inv,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onPanStart: _onResizeStart,
-                      onPanUpdate: _onResizeUpdate,
-                      onPanEnd: _onHandleEnd,
-                      child: _handle(Icons.open_in_full, Colors.white),
+                    // resize — bottom-right
+                    _corner(
+                      right: 2,
+                      bottom: 2,
+                      inv: inv,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanStart: _onResizeStart,
+                        onPanUpdate: _onResizeUpdate,
+                        onPanEnd: _onHandleEnd,
+                        child: _handle(Icons.open_in_full, Colors.white),
+                      ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

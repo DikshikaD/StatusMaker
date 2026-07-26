@@ -91,7 +91,11 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
         borderRadius: BorderRadius.vertical(
             top: Radius.circular(AppDimensions.radiusLarge)),
         child: AspectRatio(
-          aspectRatio: 4 / 5,
+          // Must match the editor canvas's own aspect ratio (see
+          // StatusPersonalizerScreen) — that's the ratio the thumbnail was
+          // actually captured at. A mismatched ratio here forced BoxFit.cover
+          // to crop the top/bottom off every real saved status.
+          aspectRatio: 9 / 16,
           child: RepaintBoundary(
             child: Stack(
               fit: StackFit.expand,

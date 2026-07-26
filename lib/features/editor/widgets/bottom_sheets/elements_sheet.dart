@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
+import 'package:status_maker/features/editor/data/asset_backgrounds.dart';
 import 'package:status_maker/features/editor/widgets/element_painter.dart';
 import 'package:status_maker/features/editor/widgets/frame_painter.dart';
 import 'package:status_maker/core/utils/responsive.dart';
@@ -9,7 +10,10 @@ import 'package:status_maker/core/utils/responsive.dart';
 /// Picker for decorative vector elements (stickers) and full-status frames.
 /// Two tabs share a colour row so the user picks the colour before adding.
 class ElementsSheet extends StatefulWidget {
-  final void Function(ElementShape shape, Color color) onAddElement;
+  /// [assetPath] is set only when the user picked an illustrated sticker
+  /// image (see [ElementShape.imageSticker]) — null for every drawn shape.
+  final void Function(ElementShape shape, Color color, String? assetPath)
+      onAddElement;
   final void Function(StatusFrame frame, Color color, double width) onSetFrame;
   final ValueChanged<double> onFrameWidth;
   final StatusFrame currentFrame;
@@ -29,7 +33,7 @@ class ElementsSheet extends StatefulWidget {
 }
 
 class _ElementsSheetState extends State<ElementsSheet> {
-  int _tab = 0; // 0 = shapes, 1 = frames
+  int _tab = 0; // 0 = shapes, 1 = stickers, 2 = frames
   Color _color = Colors.white;
   late double _frameWidth = widget.currentFrameWidth;
 
@@ -46,9 +50,60 @@ class _ElementsSheetState extends State<ElementsSheet> {
     Color(0xFF26C6DA),
   ];
 
-  static const List<ElementShape> _shapes = ElementShape.values;
+  // Plain single-tone icons (recolour fully to whatever's picked above).
+  static const List<ElementShape> _shapes = [
+    ElementShape.heart,
+    ElementShape.star,
+    ElementShape.circle,
+    ElementShape.ring,
+    ElementShape.sparkle,
+    ElementShape.flower,
+    ElementShape.diamond,
+    ElementShape.triangle,
+    ElementShape.line,
+    ElementShape.arrow,
+    ElementShape.balloon,
+    ElementShape.gift,
+    ElementShape.crown,
+    ElementShape.moon,
+    ElementShape.cloud,
+    ElementShape.bolt,
+    ElementShape.leaf,
+    ElementShape.musicNote,
+    ElementShape.ribbon,
+    ElementShape.confetti,
+  ];
+
+  // Expressive character stickers — only the body colour follows the palette;
+  // faces keep their own fixed, cute colouring (see ElementPainter).
+  static const List<ElementShape> _stickers = [
+    ElementShape.happySun,
+    ElementShape.winkStar,
+    ElementShape.blushHeart,
+    ElementShape.sleepyMoon,
+    ElementShape.waveHand,
+    ElementShape.partyPopper,
+    ElementShape.catFace,
+    ElementShape.heartEyesFace,
+  ];
 
   static const List<StatusFrame> _frames = StatusFrame.values;
+
+  // Illustrated sticker image paths under assets/stickers/, discovered at
+  // runtime (see stickerAssets()) so dropping a new image in that folder
+  // shows up here with no code change.
+  List<String> _imageStickers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImageStickers();
+  }
+
+  Future<void> _loadImageStickers() async {
+    final paths = await stickerAssets();
+    if (mounted) setState(() => _imageStickers = paths);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,7 +136,11 @@ class _ElementsSheetState extends State<ElementsSheet> {
             SizedBox(height: 14.h),
             Flexible(
               child: SingleChildScrollView(
-                child: _tab == 0 ? _shapesGrid() : _framesTab(),
+                child: switch (_tab) {
+                  0 => _shapesGrid(_shapes),
+                  1 => _stickersTab(),
+                  _ => _framesTab(),
+                },
               ),
             ),
           ],
@@ -121,7 +180,11 @@ class _ElementsSheetState extends State<ElementsSheet> {
         color: AppColors.cardLight,
         borderRadius: BorderRadius.circular(14.r),
       ),
-      child: Row(children: [tab(S.t('shapes'), 0), tab(S.t('frames'), 1)]),
+      child: Row(children: [
+        tab(S.t('shapes'), 0),
+        tab(S.t('stickers'), 1),
+        tab(S.t('frames'), 2),
+      ]),
     );
   }
 
@@ -155,7 +218,7 @@ class _ElementsSheetState extends State<ElementsSheet> {
     );
   }
 
-  Widget _shapesGrid() {
+  Widget _shapesGrid(List<ElementShape> shapes) {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -163,10 +226,10 @@ class _ElementsSheetState extends State<ElementsSheet> {
       mainAxisSpacing: 12.h,
       crossAxisSpacing: 12.w,
       children: [
-        for (final s in _shapes)
+        for (final s in shapes)
           GestureDetector(
             onTap: () {
-              widget.onAddElement(s, _color);
+              widget.onAddElement(s, _color, null);
               Navigator.of(context).pop();
             },
             child: Container(
@@ -182,6 +245,67 @@ class _ElementsSheetState extends State<ElementsSheet> {
                   color: _color == Colors.white
                       ? AppColors.textPrimary
                       : _color,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Stickers tab: illustrated PNG stickers first (the real "WhatsApp-style"
+  /// ones), then the drawn character stickers below — both go on the canvas
+  /// the same way, just rendered differently.
+  Widget _stickersTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_imageStickers.isNotEmpty) ...[
+          _imageStickersGrid(),
+          SizedBox(height: 18.h),
+          Text(
+            S.t('drawn_stickers'),
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 10.h),
+        ],
+        _shapesGrid(_stickers),
+      ],
+    );
+  }
+
+  Widget _imageStickersGrid() {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 4,
+      mainAxisSpacing: 12.h,
+      crossAxisSpacing: 12.w,
+      children: [
+        for (final path in _imageStickers)
+          GestureDetector(
+            onTap: () {
+              widget.onAddElement(ElementShape.imageSticker, _color, path);
+              Navigator.of(context).pop();
+            },
+            child: Container(
+              padding: EdgeInsets.all(10.w),
+              decoration: BoxDecoration(
+                color: AppColors.cardLight,
+                borderRadius: BorderRadius.circular(14.r),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Image.asset(
+                path,
+                fit: BoxFit.contain,
+                cacheWidth: 160,
+                errorBuilder: (_, __, ___) => Icon(
+                  Icons.broken_image_outlined,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ),

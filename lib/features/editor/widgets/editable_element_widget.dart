@@ -35,6 +35,7 @@ class EditableElementWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = _baseSize();
+    final path = element.assetPath;
     return TransformableObject(
       position: element.position,
       scale: element.scale,
@@ -46,13 +47,27 @@ class EditableElementWidget extends StatelessWidget {
       child: SizedBox(
         width: size.width,
         height: size.height,
-        child: CustomPaint(
-          painter: ElementPainter(
-            shape: element.shape,
-            color: element.color,
-            strokeWidth: element.strokeWidth,
-          ),
-        ),
+        // An illustrated sticker image renders as-is (it already has its own
+        // colours/shading); everything else is drawn in code by
+        // ElementPainter and recolours to whatever the user picked.
+        child: path != null
+            ? Image.asset(
+                path,
+                fit: BoxFit.contain,
+                cacheWidth: (size.width * 2).round(),
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.broken_image_outlined,
+                  color: Colors.white54,
+                  size: 40,
+                ),
+              )
+            : CustomPaint(
+                painter: ElementPainter(
+                  shape: element.shape,
+                  color: element.color,
+                  strokeWidth: element.strokeWidth,
+                ),
+              ),
       ),
     );
   }

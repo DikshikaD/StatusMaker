@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/utils/canvas_image.dart';
+import 'package:status_maker/features/editor/utils/image_shape_utils.dart';
 import 'package:status_maker/features/editor/widgets/heart_clipper.dart';
 import 'package:status_maker/features/editor/widgets/transformable_object.dart';
 
@@ -20,37 +21,9 @@ class EditableImageWidget extends StatelessWidget {
     required this.onTransformEnd,
   });
 
-  Size _baseSize() {
-    switch (image.shape) {
-      case ImageShape.square:
-      case ImageShape.circle:
-        return const Size(220, 220);
-      case ImageShape.roundedRectangle:
-        return const Size(220, 270);
-      case ImageShape.oval:
-        return const Size(200, 260);
-      case ImageShape.heart:
-        return const Size(240, 220);
-    }
-  }
-
-  Widget _clip(Widget img) {
-    switch (image.shape) {
-      case ImageShape.square:
-        return img;
-      case ImageShape.roundedRectangle:
-        return ClipRRect(borderRadius: BorderRadius.circular(24), child: img);
-      case ImageShape.circle:
-      case ImageShape.oval:
-        return ClipOval(child: img);
-      case ImageShape.heart:
-        return ClipPath(clipper: HeartClipper(), child: img);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final size = _baseSize();
+    final size = baseSizeForImageShape(image.shape);
 
     final bool empty = image.isPlaceholder || image.path.isEmpty;
 
@@ -74,9 +47,13 @@ class EditableImageWidget extends StatelessWidget {
             width: size.width,
             height: size.height,
             fit: BoxFit.cover,
-            // Decode only at the resolution actually shown on screen instead of
-            // the full camera resolution — massively lowers memory per photo.
-            cacheWidth: (size.width * 2).round().clamp(1, 2000),
+            // Decode at the resolution actually shown on screen (scaled up a
+            // little extra to stay sharp when the user zooms in via the photo
+            // reposition screen) instead of the full camera resolution —
+            // massively lowers memory per photo.
+            cacheWidth: (size.width * 2 * image.photoScale)
+                .round()
+                .clamp(1, 2400),
             errorBuilder: (_, __, ___) => Container(
               width: size.width,
               height: size.height,
@@ -84,6 +61,15 @@ class EditableImageWidget extends StatelessWidget {
               child:
                   const Icon(Icons.broken_image, color: Colors.white54, size: 40),
             ),
+          );
+
+    // The user's chosen pan/zoom of the photo *inside* the shape — applied
+    // before clipping so it crops exactly like the reposition screen showed.
+    final Widget positionedImg = empty
+        ? img
+        : Transform.translate(
+            offset: image.photoOffset,
+            child: Transform.scale(scale: image.photoScale, child: img),
           );
 
     return TransformableObject(
@@ -100,7 +86,7 @@ class EditableImageWidget extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _clip(img),
+            clipToImageShape(image.shape, positionedImg),
             if (image.framed)
               IgnorePointer(
                 child: CustomPaint(

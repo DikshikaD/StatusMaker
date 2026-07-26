@@ -13,6 +13,11 @@ class ImageToolbar extends StatefulWidget {
   final VoidCallback onReplace;
   final VoidCallback onToggleFrame;
 
+  /// Opens the full-screen pan/zoom adjuster so the user can choose which
+  /// part of the photo shows inside the shape. Null (hidden) when there's no
+  /// photo yet to adjust.
+  final VoidCallback? onAdjust;
+
   const ImageToolbar({
     super.key,
     required this.image,
@@ -20,6 +25,7 @@ class ImageToolbar extends StatefulWidget {
     required this.onDelete,
     required this.onReplace,
     required this.onToggleFrame,
+    this.onAdjust,
   });
 
   @override
@@ -89,6 +95,15 @@ class _ImageToolbarState extends State<ImageToolbar> {
                       active: widget.image.framed,
                       onTap: widget.onToggleFrame,
                     ),
+                    if (widget.onAdjust != null) ...[
+                      SizedBox(width: 18.w),
+                      _action(
+                        icon: Icons.crop_free,
+                        label: S.t('adjust'),
+                        active: false,
+                        onTap: widget.onAdjust!,
+                      ),
+                    ],
                     SizedBox(width: 18.w),
                     _action(
                       icon: Icons.add_photo_alternate_outlined,

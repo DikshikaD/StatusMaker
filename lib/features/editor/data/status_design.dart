@@ -98,6 +98,8 @@ Map<String, dynamic> _imageToJson(ImageObject i) => {
       'isPlaceholder': i.isPlaceholder,
       'framed': i.framed,
       'frameColor': _col(i.frameColor),
+      'photoOffset': _off(i.photoOffset),
+      'photoScale': i.photoScale,
     };
 
 ImageObject _imageFromJson(Map j) => ImageObject(
@@ -112,6 +114,9 @@ ImageObject _imageFromJson(Map j) => ImageObject(
       framed: j['framed'] as bool? ?? false,
       frameColor:
           j['frameColor'] == null ? Colors.white : _color(j['frameColor']),
+      photoOffset:
+          j['photoOffset'] == null ? Offset.zero : _offset(j['photoOffset']),
+      photoScale: _d(j['photoScale'], 1),
     );
 
 Map<String, dynamic> _elementToJson(ElementObject e) => {
@@ -122,12 +127,14 @@ Map<String, dynamic> _elementToJson(ElementObject e) => {
       'scale': e.scale,
       'rotation': e.rotation,
       'stroke': e.strokeWidth,
+      'assetPath': e.assetPath,
     };
 
 ElementObject _elementFromJson(Map j) => ElementObject(
       id: j['id'] as String,
       shape: _enumByName(ElementShape.values, j['shape'], ElementShape.heart),
       color: _color(j['color']),
+      assetPath: j['assetPath'] as String?,
       position: _offset(j['pos']),
       scale: _d(j['scale'], 1),
       rotation: _d(j['rotation'], 0),

@@ -3,6 +3,12 @@
 Scope: safe, high-impact optimisations only. No UI design or feature behaviour was
 changed. After applying these, run:
 
+> **Update (pass 2 — editor jank):** the app was reported as "very slow and
+> unresponsive" after the fixes below had already landed. The remaining
+> bottleneck was entirely inside the *editor* (`StatusPersonalizerScreen` /
+> `StatusCanvas`), which the first pass hadn't covered. See
+> "Pass 2 — Editor responsiveness" further down for the actual fixes.
+
 ```bash
 flutter pub get      # three unused packages were removed
 flutter run          # (or hot restart)
@@ -257,19 +263,156 @@ actually use them. Run `flutter pub get` after this change.
 
 ---
 
+---
+
+## Pass 2 — Editor responsiveness (the actual "slow and unresponsive" fix)
+
+> Same caveat as above: no Dart/Flutter runtime or device is available in this
+> environment, so these were verified by static review + manual bracket/type
+> checking, not by running `flutter run --profile`. Please confirm with
+> DevTools' "Performance"/"Raster" tabs, especially while dragging the
+> size/letter-spacing/line-height sliders in the editor with 3-4 text objects
+> on the canvas.
+
+The editor screen (`StatusPersonalizerScreen` → `StatusCanvas`) wraps the whole
+canvas in a single `AnimatedBuilder(animation: _controller, ...)`. That means
+**any** controller change — adding/removing an object, picking a background,
+or dragging a style slider (which calls `notifyListeners()` on every drag
+frame, so dozens of times per second) — rebuilds every object on the canvas,
+not just the one being edited. Three things made that rebuild expensive:
+
+| # | Change | File(s) | Priority |
+|---|--------|---------|----------|
+| 1 | Memoise resolved `GoogleFonts` text styles | `text_style_builder.dart` | 🔥 Critical |
+| 2 | Give each canvas object its own repaint layer | `transformable_object.dart` | 🔥 Critical |
+| 3 | Cache the controller's `images`/`texts`/`elements` views | `editor_controller.dart` | ⚡ High |
+
+### 1. 🔥 Memoise `buildTextStyle`
+
+**Why:** `buildTextStyle()` called `GoogleFonts.getFont()` fresh on every
+build — and every text object's `EditableTextWidget` rebuilds on every canvas
+rebuild (see above), so with N text objects on the canvas, a single slider
+drag re-resolved N Google Fonts styles per frame, even for the N-1 objects
+whose style hadn't changed at all that frame. This is the same anti-pattern
+that was already fixed in `StatusCard` (pass 1, item 6) — it just hadn't been
+applied to the editor itself, which is where users actually spend their time.
+
+**Original:**
+```dart
+TextStyle buildTextStyle(TextObject t) {
+  final base = TextStyle(...);
+  return GoogleFonts.getFont(t.fontFamily, textStyle: base);
+}
+```
+
+**Optimised:** a small capped cache keyed on the style-relevant fields, so
+identical style combinations resolve instantly instead of re-walking Google
+Fonts' font table and re-merging the `TextStyle` every call.
+```dart
+final Map<String, TextStyle> _styleCache = {};
+const int _styleCacheCap = 200;
+
+TextStyle buildTextStyle(TextObject t) {
+  final key = '${t.fontFamily}|${t.color}|${t.fontSize}|${t.bold}|'
+      '${t.italic}|${t.letterSpacing}|${t.lineHeight}';
+  final cached = _styleCache[key];
+  if (cached != null) return cached;
+  final style = GoogleFonts.getFont(t.fontFamily, textStyle: TextStyle(...));
+  if (_styleCache.length >= _styleCacheCap) {
+    _styleCache.remove(_styleCache.keys.first);
+  }
+  _styleCache[key] = style;
+  return style;
+}
+```
+
+**Trade-off:** the cache is capped at 200 entries (oldest evicted first) so a
+slider drag — which mints a new key every frame for the object actually being
+resized — can't grow it unbounded. Output is byte-for-byte identical; nothing
+about the rendered style changes.
+
+### 2. 🔥 Per-object `RepaintBoundary` in `TransformableObject`
+
+**Why:** the entire canvas (background + every image/text/element + frame)
+sits under **one** `RepaintBoundary` (used to rasterise the export). Without a
+boundary per object, dragging/pinching/rotating any single object marks that
+shared layer dirty, so the whole canvas repaints every frame of the
+gesture — every other photo, text and sticker included — even though nothing
+about them changed.
+
+**Original:**
+```dart
+return Positioned(
+  left: _position.dx,
+  top: _position.dy,
+  child: Transform.rotate(...),
+);
+```
+
+**Optimised:**
+```dart
+return Positioned(
+  left: _position.dx,
+  top: _position.dy,
+  child: RepaintBoundary(
+    child: Transform.rotate(...),
+  ),
+);
+```
+
+Now dragging one object repaints only its own layer. This is the direct
+editor-canvas equivalent of pass 1's fix #5 (RepaintBoundary around feed
+cards) and is very likely the single biggest contributor to the "unresponsive"
+feel, since dragging is the most frequent, most frame-rate-sensitive
+interaction in the editor.
+
+**Trade-off:** one extra compositing layer per on-canvas object — negligible
+next to the raster savings, same as pass 1's card boundaries.
+
+### 3. ⚡ Cache `EditorController`'s list views
+
+**Why:** `images`/`texts`/`elements` getters returned `List.unmodifiable(_x)`,
+which copies the backing list on *every* access. `StatusCanvas.build()` reads
+all three every rebuild — so every drag-frame notification allocated three
+fresh lists regardless of whether that particular list changed.
+
+**Original:**
+```dart
+List<ImageObject> get images => List.unmodifiable(_images);
+```
+
+**Optimised:** cache the view, invalidate only at the mutation sites that
+actually touch that list.
+```dart
+List<ImageObject>? _imagesView;
+List<ImageObject> get images => _imagesView ??= List.unmodifiable(_images);
+// each mutator (addImage, updateImageTransform, deleteImage, ...) sets
+// _imagesView = null right before notifyListeners().
+```
+
+**Trade-off:** none — same immutable-view contract for callers, just cached
+until the next mutation of that specific list.
+
+---
+
 ## Further recommendations (not applied — need judgement or bigger refactor)
 
-- **✅ Home feed is eager, not lazy.** `home_screen`'s feed builds every
-  `StatusCard` at once inside `SingleChildScrollView` + `Column`. For long
-  categories this builds many cards up front. Converting to a `CustomScrollView`
-  with a `SliverList` would make it lazy — but it's wrapped in an
-  `AnimatedSwitcher` (category cross-fade), so doing this safely without changing
-  that animation is a larger refactor. Recommended as a follow-up.
+- **✅ Home feed laziness** — already resolved: `home_screen` now builds its
+  feed with `SliverList.separated` inside a `CustomScrollView`, so only visible
+  cards are built.
+- **✅ `List.unmodifiable` getters in `EditorController`** — resolved in Pass 2
+  (item 3 above).
 - **ℹ️ Disk-persistent network image cache.** Current `Image.network` caches in
   memory only. Add `cached_network_image` if you want images to survive app
   restarts (adds one dependency).
-- **ℹ️ `List.unmodifiable` getters in `EditorController`** allocate a new list on
-  each access; if the canvas reads them per-frame during drags, cache the list or
-  expose the backing list read-only. Minor.
+- **ℹ️ The editor's single canvas-wide `AnimatedBuilder`.** `StatusCanvas` is
+  still rebuilt in full on every controller change (see Pass 2 intro) — Pass 2
+  made that rebuild cheap (memoised styles, isolated repaint layers, cached
+  list views) rather than eliminating it. A deeper fix would give each object
+  its own `ListenableBuilder`/`Selector`-style scoped listener so unrelated
+  objects don't even re-run `build()`. Not attempted here since it touches the
+  controller's rebuild architecture more invasively than a pure perf pass
+  should — worth doing only if profiling still shows the canvas rebuild itself
+  (not paint) as a bottleneck after this pass.
 - **ℹ️ Consider `flutter build --analyze-size` and DevTools "Raster"/"Memory"
   tabs** in profile mode to confirm frame times and locate any remaining spikes.

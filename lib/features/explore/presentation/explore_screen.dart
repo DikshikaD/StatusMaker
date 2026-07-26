@@ -4,16 +4,79 @@ import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/features/category/presentation/category_screen.dart';
-import 'package:status_maker/features/preview/presentation/status_preview_screen.dart';
+import 'package:status_maker/features/editor/data/templates_data.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
 import 'package:status_maker/features/editor/widgets/bottom_sheets/category_picker_sheet.dart';
+import 'package:status_maker/shared/widgets/empty_state.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
-class ExploreScreen extends StatelessWidget {
+/// Every real category in the app — the corpus search matches against
+/// (category name or any of its ready-made quotes).
+const List<String> _searchableCategories = [
+  'Good Morning',
+  'Birthday',
+  'Festival',
+  'Motivation',
+  'Love',
+  'Business',
+  'Devotional',
+  'Suprabhat',
+  'Good Night',
+  'Suvichar',
+];
+
+class _SearchHit {
+  final StatusTemplate template;
+  final String category;
+  const _SearchHit(this.template, this.category);
+}
+
+class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
 
   @override
+  State<ExploreScreen> createState() => _ExploreScreenState();
+}
+
+class _ExploreScreenState extends State<ExploreScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() => _query = _searchController.text.trim());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Matches [query] against every category's name and its ready-made quotes,
+  /// so typing either a mood ("sunshine") or a category ("birthday") works.
+  List<_SearchHit> _search(String query) {
+    final q = query.toLowerCase();
+    final hits = <_SearchHit>[];
+    for (final cat in _searchableCategories) {
+      final categoryMatches =
+          S.cat(cat).toLowerCase().contains(q) || cat.toLowerCase().contains(q);
+      for (final t in templatesForCategory(cat)) {
+        if (categoryMatches || t.text.toLowerCase().contains(q)) {
+          hits.add(_SearchHit(t, cat));
+        }
+      }
+    }
+    return hits;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final hits = _query.isEmpty ? const <_SearchHit>[] : _search(_query);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(S.t('explore_title')),
@@ -32,18 +95,29 @@ class ExploreScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: EdgeInsets.all(AppDimensions.paddingMedium),
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSearchBar(),
-            SizedBox(height: AppDimensions.paddingLarge),
-            _buildTrendingSearches(context),
-            SizedBox(height: AppDimensions.paddingLarge),
-            _buildDiscoverMore(context),
-            SizedBox(height: 80.h), // Padding for FAB
+            Padding(
+              padding: EdgeInsets.all(AppDimensions.paddingMedium),
+              child: _buildSearchBar(),
+            ),
+            Expanded(
+              child: _query.isEmpty
+                  ? SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: EdgeInsets.symmetric(
+                          horizontal: AppDimensions.paddingMedium),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildTrendingSearches(context),
+                          SizedBox(height: 80.h), // Padding for FAB
+                        ],
+                      ),
+                    )
+                  : _buildResults(hits),
+            ),
           ],
         ),
       ),
@@ -97,10 +171,18 @@ class ExploreScreen extends StatelessWidget {
         ],
       ),
       child: TextField(
+        controller: _searchController,
+        textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: S.t('search_hint'),
           hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14.sp),
           prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+                  icon: Icon(Icons.close, color: AppColors.textSecondary),
+                  onPressed: () => _searchController.clear(),
+                ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30.r),
             borderSide: BorderSide.none,
@@ -114,8 +196,14 @@ class ExploreScreen extends StatelessWidget {
   }
 
   Widget _buildTrendingSearches(BuildContext context) {
-    final searches = ['Birthday', 'Anniversary', 'Good Morning', 'Festivals', 'Inspiration'];
-    
+    const searches = [
+      'Good Morning',
+      'Birthday',
+      'Festival',
+      'Motivation',
+      'Love',
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -130,7 +218,6 @@ class ExploreScreen extends StatelessWidget {
           spacing: 8.w,
           runSpacing: 12.h,
           children: searches.map((search) {
-            final isSelected = search == 'Birthday';
             return GestureDetector(
               onTap: () {
                 Navigator.push(
@@ -141,18 +228,16 @@ class ExploreScreen extends StatelessWidget {
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.accent.withValues(alpha: 0.15) : AppColors.surface,
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(20.r),
-                  border: Border.all(
-                    color: isSelected ? AppColors.accent.withValues(alpha: 0.3) : AppColors.border,
-                  ),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Text(
-                  search,
+                  S.cat(search),
                   style: TextStyle(
-                    color: isSelected ? AppColors.accent : AppColors.textPrimary,
+                    color: AppColors.textPrimary,
                     fontSize: 13.sp,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),
@@ -163,149 +248,30 @@ class ExploreScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDiscoverMore(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              S.t('discover_more'),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontSize: 16.sp,
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(S.t('filters_soon')),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              },
-              child: Text(
-                S.t('filter'),
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 13.sp),
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: AppDimensions.paddingMedium),
-        // Staggered grid look using Row and Columns
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                children: [
-                  _buildDiscoveryCard(context, 'Serene Awakening', 'Morning', 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=2070&auto=format&fit=crop', 240.h),
-                  SizedBox(height: 12.h),
-                  _buildDiscoveryCard(context, 'Birthday Bash', 'Celebration', 'https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2000&auto=format&fit=crop', 160.h),
-                ],
-              ),
-            ),
-            SizedBox(width: 12.w),
-            Expanded(
-              child: Column(
-                children: [
-                  _buildDiscoveryCard(context, 'Morning Serenity', 'Nature', 'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?q=80&w=2000&auto=format&fit=crop', 160.h),
-                  SizedBox(height: 12.h),
-                  _buildDiscoveryCard(context, 'Our Anniversary', 'Love', 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=2000&auto=format&fit=crop', 240.h),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDiscoveryCard(BuildContext context, String title, String subtitle, String imageUrl, double height) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          FadeSlidePageRoute(page: StatusPreviewScreen(imageUrl: imageUrl)),
+  Widget _buildResults(List<_SearchHit> hits) {
+    if (hits.isEmpty) {
+      return EmptyState(
+        icon: Icons.search_off_rounded,
+        title: S.t('no_results_title'),
+        message: S.t('no_results_msg'),
+      );
+    }
+    return GridView.builder(
+      padding: EdgeInsets.fromLTRB(AppDimensions.paddingMedium, 0,
+          AppDimensions.paddingMedium, AppDimensions.paddingLarge),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.62,
+        crossAxisSpacing: 16.w,
+        mainAxisSpacing: 16.h,
+      ),
+      itemCount: hits.length,
+      itemBuilder: (context, i) {
+        final hit = hits[i];
+        return RepaintBoundary(
+          child: TemplateCard(template: hit.template, category: hit.category),
         );
       },
-      child: Container(
-      width: double.infinity,
-      height: height,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-        color: AppColors.cardLight,
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              // Decode at roughly the on-screen size (half-width card) rather
-              // than the full 2000px source: less memory, faster first paint.
-              cacheWidth: 700,
-              // Fade the image in and hold a neutral placeholder while loading
-              // so the grid never flashes or janks.
-              frameBuilder: (context, child, frame, wasSync) {
-                if (wasSync) return child;
-                return AnimatedOpacity(
-                  opacity: frame == null ? 0 : 1,
-                  duration: const Duration(milliseconds: 250),
-                  child: child,
-                );
-              },
-              loadingBuilder: (context, child, progress) => progress == null
-                  ? child
-                  : Container(color: AppColors.cardLight),
-              errorBuilder: (context, error, stackTrace) => Container(
-                color: AppColors.cardLight,
-                child: Icon(Icons.broken_image, color: AppColors.textSecondary),
-              ),
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.6),
-                ],
-              ),
-            ),
-            padding: EdgeInsets.all(12.w),
-            alignment: Alignment.bottomLeft,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 2.h),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 11.sp,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      ),
     );
   }
 }

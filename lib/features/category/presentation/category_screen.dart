@@ -57,7 +57,7 @@ class CategoryScreen extends StatelessWidget {
               // a RepaintBoundary keeps one tile's paint from touching others
               // while the grid scrolls.
               itemBuilder: (context, index) => RepaintBoundary(
-                child: _TemplateCard(
+                child: TemplateCard(
                     template: templates[index], category: categoryName),
               ),
             ),
@@ -68,11 +68,11 @@ class CategoryScreen extends StatelessWidget {
   }
 }
 
-class _TemplateCard extends StatelessWidget {
+class TemplateCard extends StatelessWidget {
   final StatusTemplate template;
   final String category;
 
-  const _TemplateCard({required this.template, required this.category});
+  const TemplateCard({required this.template, required this.category});
 
   Alignment _alignment() {
     final v = template.anchor == TemplateAnchor.top
