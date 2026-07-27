@@ -86,104 +86,124 @@ class _StatusCanvasState extends State<StatusCanvas> {
   Widget build(BuildContext context) {
     final c = widget.controller;
 
+    final borderRadius = BorderRadius.circular(24);
+
     return RepaintBoundary(
       key: widget.repaintKey,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            TemplateBackground(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Only the decorative background is clipped to the rounded card
+          // shape. The interactive layer below is deliberately NOT inside a
+          // ClipRRect: RenderClipRRect also clips hit-testing (not just
+          // painting), so a draggable object's delete handle would silently
+          // stop receiving taps the moment it neared the canvas edge — the
+          // object still looked fine, but its corner brushed the clip
+          // boundary and the handle's small overhang landed just outside
+          // the tappable region. A rounded border painted on top gives the
+          // same visual card shape without clipping hit-testing.
+          ClipRRect(
+            borderRadius: borderRadius,
+            child: TemplateBackground(
               state: c.background,
               onTap: () {
                 _commitEditing();
                 c.clearSelection();
               },
             ),
+          ),
 
-            // Vector elements (stickers)
-            ...c.elements.map((el) {
-              return ValueListenableBuilder<String?>(
-                key: ValueKey('el_${el.id}'),
-                valueListenable: c.selectedId,
-                builder: (context, sel, _) {
-                  return EditableElementWidget(
-                    element: el,
-                    isSelected: sel == el.id,
-                    onSelect: () => c.select(el.id),
-                    onDelete: () => c.deleteElement(el.id),
-                    onTransformEnd: (p, s, r) => c.updateElementTransform(
-                      el.id,
-                      position: p,
-                      scale: s,
-                      rotation: r,
-                    ),
-                  );
-                },
-              );
-            }),
+          // Vector elements (stickers)
+          ...c.elements.map((el) {
+            return ValueListenableBuilder<String?>(
+              key: ValueKey('el_${el.id}'),
+              valueListenable: c.selectedId,
+              builder: (context, sel, _) {
+                return EditableElementWidget(
+                  element: el,
+                  isSelected: sel == el.id,
+                  onSelect: () => c.select(el.id),
+                  onDelete: () {
+                    debugPrint('[StatusCanvas] deleteElement(${el.id})');
+                    c.deleteElement(el.id);
+                  },
+                  onTransformEnd: (p, s, r) => c.updateElementTransform(
+                    el.id,
+                    position: p,
+                    scale: s,
+                    rotation: r,
+                  ),
+                );
+              },
+            );
+          }),
 
-            // Floating images
-            ...c.images.map((img) {
-              return ValueListenableBuilder<String?>(
-                key: ValueKey('img_${img.id}'),
-                valueListenable: c.selectedId,
-                builder: (context, sel, _) {
-                  return EditableImageWidget(
-                    image: img,
-                    isSelected: sel == img.id,
-                    onSelect: () => c.select(img.id),
-                    onDelete: () => c.deleteImage(img.id),
-                    onTransformEnd: (p, s, r) => c.updateImageTransform(
-                      img.id,
-                      position: p,
-                      scale: s,
-                      rotation: r,
-                    ),
-                  );
-                },
-              );
-            }),
+          // Floating images
+          ...c.images.map((img) {
+            return ValueListenableBuilder<String?>(
+              key: ValueKey('img_${img.id}'),
+              valueListenable: c.selectedId,
+              builder: (context, sel, _) {
+                return EditableImageWidget(
+                  image: img,
+                  isSelected: sel == img.id,
+                  onSelect: () => c.select(img.id),
+                  onDelete: () {
+                    debugPrint('[StatusCanvas] deleteImage(${img.id})');
+                    c.deleteImage(img.id);
+                  },
+                  onTransformEnd: (p, s, r) => c.updateImageTransform(
+                    img.id,
+                    position: p,
+                    scale: s,
+                    rotation: r,
+                  ),
+                );
+              },
+            );
+          }),
 
-            // Texts
-            ...c.texts.map((t) {
-              if (_editingId == t.id) return _buildInlineEditor(t);
-              return ValueListenableBuilder<String?>(
-                key: ValueKey('txt_${t.id}'),
-                valueListenable: c.selectedId,
-                builder: (context, sel, _) {
-                  return EditableTextWidget(
-                    textObject: t,
-                    isSelected: sel == t.id,
-                    onSelect: () => c.select(t.id),
-                    onDelete: () => c.deleteText(t.id),
-                    onEdit: () => _startEditing(t),
-                    onTransformEnd: (p, s, r) => c.updateTextTransform(
-                      t.id,
-                      position: p,
-                      scale: s,
-                      rotation: r,
-                    ),
-                  );
-                },
-              );
-            }),
+          // Texts
+          ...c.texts.map((t) {
+            if (_editingId == t.id) return _buildInlineEditor(t);
+            return ValueListenableBuilder<String?>(
+              key: ValueKey('txt_${t.id}'),
+              valueListenable: c.selectedId,
+              builder: (context, sel, _) {
+                return EditableTextWidget(
+                  textObject: t,
+                  isSelected: sel == t.id,
+                  onSelect: () => c.select(t.id),
+                  onDelete: () {
+                    debugPrint('[StatusCanvas] deleteText(${t.id})');
+                    c.deleteText(t.id);
+                  },
+                  onEdit: () => _startEditing(t),
+                  onTransformEnd: (p, s, r) => c.updateTextTransform(
+                    t.id,
+                    position: p,
+                    scale: s,
+                    rotation: r,
+                  ),
+                );
+              },
+            );
+          }),
 
-            // Full-status decorative frame — always on top, never interactive.
-            if (c.frame != StatusFrame.none)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: CustomPaint(
-                    painter: FramePainter(
-                      frame: c.frame,
-                      color: c.frameColor,
-                      width: c.frameWidth,
-                    ),
+          // Full-status decorative frame — always on top, never interactive.
+          if (c.frame != StatusFrame.none)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: FramePainter(
+                    frame: c.frame,
+                    color: c.frameColor,
+                    width: c.frameWidth,
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

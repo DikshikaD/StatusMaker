@@ -1,18 +1,52 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 
 /// Wraps any canvas object (text or image) and gives it the full set of
 /// direct-manipulation interactions in ONE place:
 ///
-///  • one-finger drag to move
-///  • two-finger pinch to resize + twist to rotate (single gesture)
+///  • one-finger drag to move, anywhere on the canvas
+///  • two-finger pinch to resize, with simultaneous twist-to-rotate
+///    (if [enableRotation] is true)
 ///  • a delete handle (tap)
-///  • a rotate handle (drag) and a resize handle (drag) for discoverability
+///
+/// All of drag/resize/rotate are driven by a SINGLE `GestureDetector`'s
+/// `onScaleStart/Update/End` triad. Flutter's scale recognizer natively
+/// reports pan (`focalPointDelta`), zoom (`scale`) and twist (`rotation`)
+/// together for the same pointer set — there is no separate recognizer per
+/// gesture, so there is nothing for them to conflict over. Do not add a
+/// second `GestureDetector`/`Listener` for move/resize/rotate; route any new
+/// transform behavior through this same callback triad.
 ///
 /// While a gesture is in flight only local state changes (one cheap repaint);
-/// the controller is written exactly once, on gesture end. Handles are
-/// inverse-scaled so they stay the same visual size no matter how big the
-/// object gets.
+/// the controller is written exactly once, on gesture end.
+///
+/// DELETE HANDLE IS A SCREEN-SPACE "BILLBOARD", NOT PART OF THE OBJECT'S OWN
+/// `Transform.rotate`/`Transform.scale` SUBTREE:
+///
+/// The content and its selection border deliberately DO rotate/scale with the
+/// object — that's correct, expected behavior (the border traces the actual
+/// rotated/scaled bounds). The delete handle must NOT, and earlier versions
+/// that nested it inside the same transform chain had a real, reproduced bug:
+/// once an object was rotated (via two-finger twist), the handle's hit-test
+/// region became a rotated, non-axis-aligned quadrilateral in screen space.
+/// Hit-testing was still mathematically exact, but that's exactly the
+/// problem — a user aiming at "the visual corner" of a rotated object no
+/// longer has a forgiving, axis-aligned target, so taps that look correct to
+/// the eye land just outside the true (rotated) hit box and are silently
+/// dropped. Device logs confirmed this: pinch+rotate (scale 2.25x,
+/// rotation ≈ -6°) followed immediately by a delete attempt produced no
+/// gesture callback at all — the tap hit neither the content nor the handle.
+///
+/// The fix used by every production design tool (Figma, Canva, PowerPoint):
+/// render selection handles as a screen-space overlay, computed from the
+/// object's transformed corner position, but never itself rotated or scaled.
+/// `_deleteHandleOffset()` below does that math directly (rotate-then-scale
+/// around the object's own center, matching the paint transform order), so
+/// the delete target is always upright, always the same tappable size, and
+/// always exactly where the eye expects it — independent of how the object
+/// underneath has been transformed.
 class TransformableObject extends StatefulWidget {
   final Offset position;
   final double scale;
@@ -23,6 +57,10 @@ class TransformableObject extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback? onDoubleTap;
   final void Function(Offset position, double scale, double rotation) onTransformEnd;
+
+  /// Whether two-finger twist rotates the object. Defaults to true; set to
+  /// false for element types that should stay axis-aligned.
+  final bool enableRotation;
 
   const TransformableObject({
     super.key,
@@ -35,6 +73,7 @@ class TransformableObject extends StatefulWidget {
     required this.onDelete,
     required this.onTransformEnd,
     this.onDoubleTap,
+    this.enableRotation = true,
   });
 
   @override
@@ -42,12 +81,18 @@ class TransformableObject extends StatefulWidget {
 }
 
 class _TransformableObjectState extends State<TransformableObject> {
-  // Transparent inset around the content. Handles live inside this inset so
-  // they stay within the object's hit-test bounds (overflowing children can't
-  // receive taps in Flutter).
-  static const double _pad = 16;
+  // Gap between the content and the selection border — kept small so the
+  // border hugs the content closely. The delete handle no longer needs this
+  // gap to avoid overlapping the content's hit box (it's a screen-space
+  // billboard, see class doc comment), so this is purely a visual choice now.
+  static const double _pad = 6;
+  static const double _handleSize = 36;
 
-  final GlobalKey _contentKey = GlobalKey();
+  // Measured once layout completes; used only to place the billboard delete
+  // handle at the object's actual top-left corner. A reasonable default
+  // covers the very first frame before the real measurement lands.
+  final GlobalKey _boxKey = GlobalKey();
+  Size _measuredSize = const Size(160, 160);
 
   late Offset _position;
   late double _scale;
@@ -57,8 +102,6 @@ class _TransformableObjectState extends State<TransformableObject> {
   // gesture bases
   double _baseScale = 1.0;
   double _baseRotation = 0.0;
-  double _startDist = 0.0;
-  double _startAngle = 0.0;
 
   @override
   void initState() {
@@ -72,6 +115,12 @@ class _TransformableObjectState extends State<TransformableObject> {
     if (!_interacting) _sync();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _remeasure());
+  }
+
   void _sync() {
     _position = widget.position;
     _scale = widget.scale;
@@ -80,14 +129,24 @@ class _TransformableObjectState extends State<TransformableObject> {
 
   void _commit() => widget.onTransformEnd(_position, _scale, _rotation);
 
-  Offset? _center() {
-    final ctx = _contentKey.currentContext;
-    final box = ctx?.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return null;
-    return box.localToGlobal(box.size.center(Offset.zero));
+  // Reads the content box's actual (unscaled) layout size once it's
+  // available, and schedules one more frame to pick up the corrected delete
+  // handle position. Content size only changes when the underlying element
+  // changes (e.g. text edited), so this is cheap and rare, not per-gesture.
+  void _remeasure() {
+    if (!mounted) return;
+    final box = _boxKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box != null && box.hasSize && box.size != _measuredSize) {
+      setState(() => _measuredSize = box.size);
+    }
   }
 
-  // ---- move + pinch + twist -------------------------------------------------
+  // ---- move + pinch to resize + twist to rotate --------------------------
+  // One recognizer, one set of callbacks, all three transforms — see the
+  // class doc comment for why this must stay a single GestureDetector.
+  // No handle-related guards needed here: the delete handle occupies screen
+  // space this GestureDetector's content box doesn't cover (see build()), so
+  // a pointer that lands on it is never also delivered to this recognizer.
   void _onScaleStart(ScaleStartDetails d) {
     widget.onSelect();
     _baseScale = _scale;
@@ -99,178 +158,138 @@ class _TransformableObjectState extends State<TransformableObject> {
     setState(() {
       _position += d.focalPointDelta;
       _scale = (_baseScale * d.scale).clamp(0.3, 6.0);
-      _rotation = _baseRotation + d.rotation;
+      if (widget.enableRotation) {
+        _rotation = _baseRotation + d.rotation;
+      }
     });
   }
 
   void _onScaleEnd(ScaleEndDetails d) {
     _interacting = false;
     _commit();
+    // The gesture may have changed the content's footprint indirectly (e.g.
+    // triggered a rebuild upstream); pick up any resulting size change.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _remeasure());
   }
 
-  // ---- rotate handle --------------------------------------------------------
-  void _onRotateStart(DragStartDetails d) {
-    final c = _center();
-    if (c == null) return;
-    _startAngle = (d.globalPosition - c).direction;
-    _baseRotation = _rotation;
-    _interacting = true;
-  }
-
-  void _onRotateUpdate(DragUpdateDetails d) {
-    final c = _center();
-    if (c == null) return;
-    final angle = (d.globalPosition - c).direction;
-    setState(() => _rotation = _baseRotation + (angle - _startAngle));
-  }
-
-  // ---- resize handle --------------------------------------------------------
-  void _onResizeStart(DragStartDetails d) {
-    final c = _center();
-    if (c == null) return;
-    _startDist = (d.globalPosition - c).distance;
-    _baseScale = _scale;
-    _interacting = true;
-  }
-
-  void _onResizeUpdate(DragUpdateDetails d) {
-    final c = _center();
-    if (c == null || _startDist <= 0) return;
-    final dist = (d.globalPosition - c).distance;
-    setState(() => _scale = (_baseScale * dist / _startDist).clamp(0.3, 6.0));
-  }
-
-  void _onHandleEnd(DragEndDetails d) {
-    _interacting = false;
-    _commit();
+  /// Screen-space offset (relative to this object's canvas origin, i.e. the
+  /// same coordinate space `_position` lives in) of the delete handle's
+  /// center, given the object's current rotation/scale. Mirrors the paint
+  /// transform order used in build(): scale first, then rotate, both
+  /// pivoting on the nominal (unscaled) box's own center — exactly what
+  /// `Transform.scale` + `Transform.rotate` do to the content itself.
+  Offset _deleteHandleOffset() {
+    final center = Offset(_measuredSize.width / 2, _measuredSize.height / 2);
+    // Anchor at the selection border's own corner (inset by `_pad` from the
+    // box edge — the same inset the border Positioned uses below), so the
+    // handle sits right on top of the stroke corner instead of floating
+    // further out past it.
+    const corner = Offset(_pad, _pad);
+    final scaled = (corner - center) * _scale;
+    final cosA = math.cos(_rotation);
+    final sinA = math.sin(_rotation);
+    final rotated = Offset(
+      scaled.dx * cosA - scaled.dy * sinA,
+      scaled.dx * sinA + scaled.dy * cosA,
+    );
+    return _position + center + rotated;
   }
 
   @override
   Widget build(BuildContext context) {
-    final inv = _scale == 0 ? 1.0 : 1 / _scale;
+    final handleCenter = _deleteHandleOffset();
 
-    return Positioned(
-      left: _position.dx,
-      top: _position.dy,
-      // Gives this object its own compositing layer, so dragging/pinching it
-      // repaints only itself — not every other image/text/element sharing the
-      // canvas's outer RepaintBoundary. This is what makes moving one object
-      // smooth regardless of how many other objects are on the canvas.
+    return Positioned.fill(
+      // This RepaintBoundary is what makes dragging/pinching/rotating cheap:
+      // it isolates EVERYTHING this widget paints (content + border + the
+      // billboard handle below) into its own compositing layer, so a
+      // per-frame setState here repaints only this one element — never the
+      // rest of the canvas. Previously the billboard handle sat outside any
+      // boundary at this level, so every drag/resize frame had to repaint
+      // starting from the canvas's own top-level RepaintBoundary (in
+      // status_canvas.dart) instead of this element's — i.e. the WHOLE
+      // canvas repainted on every gesture frame. That cost scales with the
+      // canvas's total content, which is exactly why it got worse at high
+      // zoom (more/larger pixels to redraw each frame). Keep this boundary
+      // wrapping the full per-object Stack, not just the content subtree.
       child: RepaintBoundary(
-        child: Transform.rotate(
-          angle: _rotation,
-          child: Transform.scale(
-            scale: _scale,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: widget.onSelect,
-              onDoubleTap: widget.onDoubleTap,
-              onScaleStart: _onScaleStart,
-              onScaleUpdate: _onScaleUpdate,
-              onScaleEnd: _onScaleEnd,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // Content, inset by _pad so the corner handles land inside
-                  // the Stack's bounds (and therefore stay tappable).
-                  Padding(
-                    padding: const EdgeInsets.all(_pad),
-                    child: Container(key: _contentKey, child: widget.child),
-                  ),
-                  if (widget.isSelected) ...[
-                    Positioned(
-                      left: _pad,
-                      top: _pad,
-                      right: _pad,
-                      bottom: _pad,
-                      child: IgnorePointer(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(
-                                color: AppColors.accent, width: 1.5),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: _position.dx,
+              top: _position.dy,
+              child: Transform.rotate(
+                angle: _rotation,
+                child: Transform.scale(
+                  scale: _scale,
+                  // clipBehavior: Clip.none so the selection border (inset
+                  // by _pad, i.e. outside the content itself) isn't clipped —
+                  // this Stack's own size is fixed by the Padding below, so
+                  // it never affects the content's actual size/hit box.
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Padding(
+                        key: _boxKey,
+                        padding: const EdgeInsets.all(_pad),
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: widget.onSelect,
+                          onDoubleTap: widget.onDoubleTap,
+                          onScaleStart: _onScaleStart,
+                          onScaleUpdate: _onScaleUpdate,
+                          onScaleEnd: _onScaleEnd,
+                          child: widget.child,
                         ),
                       ),
-                    ),
-                    // delete — top-left. Uses a raw pointer-down instead of
-                    // onTap: this handle sits inside the same GestureDetector
-                    // subtree as the parent's onScaleStart/Update/End (used to
-                    // move/pinch the whole object), so a tap here also enters
-                    // the same gesture arena as that pan/scale recognizer. On
-                    // a small 28x28 target, even a pixel of finger jitter
-                    // during the tap can cross the touch-slop threshold and
-                    // let the parent's scale recognizer win instead — the
-                    // "delete" silently turns into a tiny nudge. A Listener
-                    // fires unconditionally on the raw pointer event, so it
-                    // can't lose that race.
-                    _corner(
-                      left: 2,
-                      top: 2,
-                      inv: inv,
-                      child: Listener(
-                        behavior: HitTestBehavior.opaque,
-                        onPointerDown: (_) => widget.onDelete(),
-                        child: _handle(Icons.close, Colors.redAccent),
-                      ),
-                    ),
-                    // rotate — top-right
-                    _corner(
-                      right: 2,
-                      top: 2,
-                      inv: inv,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onPanStart: _onRotateStart,
-                        onPanUpdate: _onRotateUpdate,
-                        onPanEnd: _onHandleEnd,
-                        child: _handle(Icons.rotate_right, AppColors.accent),
-                      ),
-                    ),
-                    // resize — bottom-right
-                    _corner(
-                      right: 2,
-                      bottom: 2,
-                      inv: inv,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onPanStart: _onResizeStart,
-                        onPanUpdate: _onResizeUpdate,
-                        onPanEnd: _onHandleEnd,
-                        child: _handle(Icons.open_in_full, Colors.white),
-                      ),
-                    ),
-                  ],
-                ],
+                      if (widget.isSelected)
+                        Positioned(
+                          left: _pad,
+                          top: _pad,
+                          right: _pad,
+                          bottom: _pad,
+                          child: IgnorePointer(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                    color: AppColors.accent, width: 1.5),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
+            // Delete handle — a screen-space billboard: always upright,
+            // always the same tappable size, positioned at the object's
+            // actual (rotated/scaled) corner. See the class doc comment for
+            // why this must NOT live inside the Transform.rotate/scale
+            // subtree above. It's still inside the RepaintBoundary above, so
+            // it repainting each gesture frame stays isolated to this object.
+            if (widget.isSelected)
+              Positioned(
+                left: handleCenter.dx - _handleSize / 2,
+                top: handleCenter.dy - _handleSize / 2,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: widget.onDelete,
+                  child: _handle(Icons.close, Colors.redAccent),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _corner({
-    double? left,
-    double? top,
-    double? right,
-    double? bottom,
-    required double inv,
-    required Widget child,
-  }) {
-    return Positioned(
-      left: left,
-      top: top,
-      right: right,
-      bottom: bottom,
-      child: Transform.scale(scale: inv, child: child),
-    );
-  }
-
   Widget _handle(IconData icon, Color color) {
     return Container(
-      width: 28,
-      height: 28,
+      width: _handleSize,
+      height: _handleSize,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
