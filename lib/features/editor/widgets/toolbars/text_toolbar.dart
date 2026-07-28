@@ -5,6 +5,7 @@ import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 import 'package:status_maker/features/editor/widgets/bottom_sheets/font_sheet.dart';
+import 'package:status_maker/features/editor/utils/sheet_coordinator.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
 enum _Panel { none, font, size, color, align, letter, line }
@@ -249,10 +250,8 @@ class _TextToolbarState extends State<TextToolbar> {
   /// tile previews the app name in that font, so styles are easy to compare.
   void _openFontSheet() {
     setState(() => _active = _Panel.none);
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    SheetCoordinator.show(
+      context,
       builder: (_) => FontSheet(
         currentFont: _t.fontFamily,
         onSelect: (font) => widget.onChanged(_t.copyWith(fontFamily: font)),

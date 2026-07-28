@@ -6,6 +6,7 @@ import 'package:status_maker/shared/widgets/empty_state.dart';
 import 'package:status_maker/shared/widgets/app_shimmer.dart';
 import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/shared/widgets/saved_status_card.dart';
+import 'package:status_maker/shared/widgets/confirm_dialog.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
@@ -100,6 +101,15 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
     }
   }
 
+  Future<void> _confirmAndDelete(SavedStatus status) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: S.t('delete_status_title'),
+      message: S.t('delete_status_msg'),
+    );
+    if (confirmed == true) _delete(status);
+  }
+
   Future<void> _delete(SavedStatus status) async {
     // Optimistically remove, then call the backend.
     final previous = List<SavedStatus>.from(_statuses);
@@ -175,7 +185,7 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
               status: status,
               tag: status.isPublic ? S.t('tag_public') : S.t('tag_private'),
               onCustomize: () => _openEditor(status),
-              onDelete: () => _delete(status),
+              onDelete: () => _confirmAndDelete(status),
             ),
           );
         },

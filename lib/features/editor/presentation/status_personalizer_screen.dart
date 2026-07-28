@@ -9,6 +9,7 @@ import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/status_design.dart';
 import 'package:status_maker/features/editor/data/templates_data.dart';
 import 'package:status_maker/features/editor/utils/editor_export.dart';
+import 'package:status_maker/features/editor/utils/sheet_coordinator.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
 import 'package:status_maker/features/editor/presentation/photo_reposition_screen.dart';
 import 'package:status_maker/features/editor/widgets/status_canvas.dart';
@@ -199,10 +200,8 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   }
 
   void _showElementsSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    SheetCoordinator.show(
+      context,
       builder: (_) => ElementsSheet(
         currentFrame: _controller.frame,
         currentFrameWidth: _controller.frameWidth,
@@ -216,10 +215,8 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   }
 
   void _showQuotesSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    SheetCoordinator.show(
+      context,
       builder: (_) => QuotesSheet(
         category: widget.category,
         onSelect: (quote) => _controller.addText(quote),
@@ -228,10 +225,8 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   }
 
   void _showBackgroundSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    SheetCoordinator.show(
+      context,
       builder: (_) => BackgroundSheet(
         category: widget.category,
         onSelect: _controller.setBackground,

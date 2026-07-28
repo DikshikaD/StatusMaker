@@ -229,6 +229,12 @@ class S {
       'कृपया थोड़ी देर बाद फिर से प्रयास करें।'
     ],
     'deleted_ok': ['Deleted', 'डिलीट हो गया'],
+    'cancel': ['Cancel', 'रद्द करें'],
+    'delete_status_title': ['Delete this?', 'इसे डिलीट करें?'],
+    'delete_status_msg': [
+      'This will permanently delete this creation. This can\'t be undone.',
+      'यह रचना हमेशा के लिए डिलीट हो जाएगी। इसे वापस नहीं लाया जा सकता।'
+    ],
 
     // home — community feed
     'community_feed': ['Community Feed', 'कम्युनिटी फ़ीड'],
