@@ -6,6 +6,7 @@ import 'package:status_maker/core/utils/responsive.dart';
 import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/shared/widgets/app_shimmer.dart';
 import 'package:status_maker/shared/utils/share_image.dart';
+import 'package:status_maker/features/statuses/data/likes_store.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 
 /// A feed card for a *saved* status (a real user creation from Supabase). Shows
@@ -37,8 +38,18 @@ class SavedStatusCard extends StatefulWidget {
 
 class _SavedStatusCardState extends State<SavedStatusCard> {
   bool _pressed = false;
-  bool _liked = false;
   bool _sharing = false;
+
+  /// Like state is NOT held here. It used to be a local bool, which is why the
+  /// heart reset and the count reverted as soon as the card rebuilt — the tap
+  /// never reached the backend. [LikesStore] owns it now.
+  Future<void> _toggleLike() async {
+    try {
+      await LikesStore.instance.toggle(widget.status);
+    } catch (_) {
+      if (mounted) AppSnackBar.error(context, S.t('something_wrong'));
+    }
+  }
 
   Future<void> _share() async {
     final url = widget.status.thumbUrl;
@@ -162,17 +173,23 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
   }
 
   Widget _actionBar(SavedStatus s) {
-    final likeCount = s.likesCount + (_liked ? 1 : 0);
     return Padding(
       padding: EdgeInsets.fromLTRB(8.w, 10.h, 12.w, 12.h),
       child: Row(
         children: [
-          // Like
-          _iconAction(
-            icon: _liked ? Icons.favorite : Icons.favorite_border,
-            color: _liked ? AppColors.accent : AppColors.textSecondary,
-            label: '$likeCount',
-            onTap: () => setState(() => _liked = !_liked),
+          // Like — rebuilds from the shared store, so the heart and count are
+          // correct on every rebuild and stay in step with the other tabs.
+          ListenableBuilder(
+            listenable: LikesStore.instance,
+            builder: (context, _) {
+              final liked = LikesStore.instance.isLiked(s.id);
+              return _iconAction(
+                icon: liked ? Icons.favorite : Icons.favorite_border,
+                color: liked ? AppColors.accent : AppColors.textSecondary,
+                label: '${LikesStore.instance.countFor(s)}',
+                onTap: _toggleLike,
+              );
+            },
           ),
           // Share (beside like)
           _iconAction(

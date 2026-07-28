@@ -4,6 +4,7 @@ import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/home/presentation/main_layout.dart';
+import 'package:status_maker/core/utils/app_navigation.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
@@ -77,7 +78,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   void _goToApp() {
     Navigator.of(context).pushReplacement(
-      FadeSlidePageRoute(page: const MainLayout()),
+      FadeSlidePageRoute(
+        page: const MainLayout(),
+        // Named so screens pushed above the shell can pop back to exactly it
+        // (see AppNav) no matter how many routes deep they are.
+        settings: const RouteSettings(name: AppNav.shellRouteName),
+      ),
     );
   }
 

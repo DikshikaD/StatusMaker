@@ -126,6 +126,19 @@ class S {
     ],
     'open_editor': ['Open Editor', 'एडिटर खोलें'],
     'themes': ['Themes', 'थीम'],
+    'ready_templates': ['Ready Templates', 'तैयार टेम्पलेट'],
+    'ready_templates_hint': [
+      'Tap one to open it in the editor — everything is editable',
+      'एडिटर में खोलने के लिए टैप करें — सब कुछ एडिट किया जा सकता है'
+    ],
+
+    // ready-template theme rows
+    'grp_morning': ['Good Morning', 'शुभ प्रभात'],
+    'grp_wishes': ['Wishes & Festivals', 'शुभकामनाएँ और त्योहार'],
+    'grp_night': ['Good Night', 'शुभ रात्रि'],
+    'grp_devotional': ['Devotional', 'भक्ति'],
+    'grp_love': ['Love & Memories', 'प्यार और यादें'],
+    'grp_quotes': ['Quotes', 'सुविचार'],
     'popular_templates': ['Popular Templates', 'लोकप्रिय टेम्पलेट'],
     'all': ['All', 'सभी'],
     'designs': ['designs', 'डिज़ाइन'],
@@ -290,6 +303,19 @@ class S {
     ],
     'reset': ['Reset', 'रीसेट'],
     'done': ['Done', 'हो गया'],
+
+    // locked (fixed) template editor
+    'edit_text': ['Edit text', 'टेक्स्ट बदलें'],
+    'remove_photo': ['Remove photo', 'फ़ोटो हटाएँ'],
+    // Title of the words editor when the tapped slot is the design's name line.
+    'your_name': ['Add your name', 'अपना नाम जोड़ें'],
+    // Shown in the name slot until the user types their own — keep it short so
+    // it fits every design's name line.
+    'name_placeholder': ['— Your Name', '— आपका नाम'],
+    'locked_select_hint': [
+      'Tap the text or photo to change it — the layout stays fixed',
+      'बदलने के लिए टेक्स्ट या फ़ोटो पर टैप करें — लेआउट फ़िक्स्ड रहेगा'
+    ],
 
     // editor — background sheet
     'presets': ['Presets', 'प्रीसेट'],

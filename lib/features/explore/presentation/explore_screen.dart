@@ -7,6 +7,7 @@ import 'package:status_maker/features/category/presentation/category_screen.dart
 import 'package:status_maker/features/editor/data/templates_data.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
 import 'package:status_maker/features/editor/widgets/bottom_sheets/category_picker_sheet.dart';
+import 'package:status_maker/features/editor/widgets/ready_templates_section.dart';
 import 'package:status_maker/shared/widgets/empty_state.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
@@ -103,20 +104,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
               child: _buildSearchBar(),
             ),
             Expanded(
-              child: _query.isEmpty
-                  ? SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      padding: EdgeInsets.symmetric(
-                          horizontal: AppDimensions.paddingMedium),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildTrendingSearches(context),
-                          SizedBox(height: 80.h), // Padding for FAB
-                        ],
-                      ),
-                    )
-                  : _buildResults(hits),
+              child: _query.isEmpty ? _buildIdleView(context) : _buildResults(hits),
             ),
           ],
         ),
@@ -154,6 +142,32 @@ class _ExploreScreenState extends State<ExploreScreen> {
           showQuotesOnStart: true,
         ),
       ),
+    );
+  }
+
+  /// What Search shows before anything is typed: trending chips, then the
+  /// ready-made template rows.
+  ///
+  /// A lazy [ListView.builder] rather than a SingleChildScrollView + Column,
+  /// because this tab is inside an IndexedStack and therefore gets built at
+  /// launch whether or not the user opens it. Building all six template rows
+  /// eagerly would mount ~18 preview canvases (each a motif painter plus styled
+  /// text) before the user has even seen the first screen. This way only the
+  /// rows actually on screen are built.
+  Widget _buildIdleView(BuildContext context) {
+    final items = <Widget>[
+      _buildTrendingSearches(context),
+      SizedBox(height: AppDimensions.paddingXLarge),
+      ...const ReadyTemplatesSection().items(context),
+      SizedBox(height: 80.h), // clears the floating action button
+    ];
+
+    return ListView.builder(
+      physics: const BouncingScrollPhysics(),
+      padding:
+          EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
+      itemCount: items.length,
+      itemBuilder: (_, i) => items[i],
     );
   }
 

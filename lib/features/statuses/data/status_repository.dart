@@ -29,6 +29,7 @@ class StatusRepositoryException implements Exception {
 ///   5. Post flips is_public=true so it appears on the public Home feed.
 class StatusRepository {
   static const _table = 'statuses';
+  static const _likesTable = 'likes';
   static const _assetsBucket = 'status-assets';
   static const _thumbsBucket = 'thumbnails';
 
@@ -171,6 +172,95 @@ class StatusRepository {
     } catch (e) {
       debugPrint('StatusRepository.fetchMine failed: $e');
       throw StatusRepositoryException('Couldn\'t load your creations.');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Likes
+  //
+  // `public.likes` is a (user_id, status_id) join table; a trigger keeps
+  // `statuses.likes_count` in sync on insert/delete, so nothing here has to
+  // touch the count itself. See supabase/schema.sql.
+  // ---------------------------------------------------------------------------
+
+  /// Status ids the current user has liked, most recently liked first.
+  ///
+  /// Returns null when the likes couldn't be read at all (no session yet, or a
+  /// network error) — deliberately distinct from an empty list, which means "read
+  /// fine, nothing liked". Callers use that to avoid caching a failed read as
+  /// "this user has no likes" for the rest of the session.
+  Future<List<String>?> fetchLikedIds({int limit = 200}) async {
+    if (!await SupabaseService.ensureReady() ||
+        SupabaseService.userId == null) {
+      return null;
+    }
+    try {
+      final rows = await _db
+          .from(_likesTable)
+          .select('status_id')
+          .eq('user_id', SupabaseService.userId!)
+          .order('created_at', ascending: false)
+          .limit(limit);
+      return (rows as List)
+          .map((r) => (r as Map)['status_id'] as String)
+          .toList();
+    } catch (e) {
+      debugPrint('StatusRepository.fetchLikedIds failed: $e');
+      return null;
+    }
+  }
+
+  /// Likes or unlikes [statusId] for the current user.
+  ///
+  /// Liking uses upsert so a double-tap can't fail on the primary key, which
+  /// means the caller can treat this as idempotent.
+  Future<void> setLike(String statusId, bool liked) async {
+    await _requireReady();
+    final uid = SupabaseService.userId!;
+    try {
+      if (liked) {
+        await _db.from(_likesTable).upsert(
+          {'user_id': uid, 'status_id': statusId},
+          onConflict: 'user_id,status_id',
+        );
+      } else {
+        await _db
+            .from(_likesTable)
+            .delete()
+            .eq('user_id', uid)
+            .eq('status_id', statusId);
+      }
+    } catch (e) {
+      debugPrint('StatusRepository.setLike failed: $e');
+      throw StatusRepositoryException('Couldn\'t update. Please try again.');
+    }
+  }
+
+  /// The statuses the current user has liked — the "Saved Templates" tab.
+  ///
+  /// Two queries rather than a PostgREST embed: the ids come from `likes` (which
+  /// gives the like order), then the rows are fetched by id and re-sorted to
+  /// match. A liked status that has since been deleted or made private simply
+  /// doesn't come back, and is skipped.
+  Future<List<SavedStatus>> fetchLiked({int limit = 100}) async {
+    final ids = await fetchLikedIds(limit: limit);
+    if (ids == null || ids.isEmpty) return const [];
+    try {
+      final rows = await _db.from(_table).select().inFilter('id', ids);
+      final byId = <String, SavedStatus>{};
+      for (final r in rows as List) {
+        final status =
+            SavedStatus.fromRow((r as Map).cast<String, dynamic>());
+        byId[status.id] = status;
+      }
+      // Keep the order the user liked them in.
+      return [
+        for (final id in ids)
+          if (byId[id] != null) byId[id]!,
+      ];
+    } catch (e) {
+      debugPrint('StatusRepository.fetchLiked failed: $e');
+      throw StatusRepositoryException('Couldn\'t load your saved templates.');
     }
   }
 

@@ -10,8 +10,8 @@ class AppColors {
   // ---- Brand colors (identical in both themes) ----
   static const Color primary = Color(0xFF172331); // Dark navy blue from buttons
   static const Color primaryLight = Color(0xFF415A7E); // Lighter slate-blue
-  static const Color accent = Color(0xFFE38870); // Warm peach/orange from tags
-  static const Color accentLight = Color(0xFFF3B49E); // Lighter peach
+  static const Color accent = Color(0xFFEF6745); // Warm peach/orange from tags
+  static const Color accentLight = Color(0xFFE88766); // Lighter peach
 
   /// Brand gradient built from the primary color family.
   static const List<Color> primaryGradient = [primary, primaryLight];

@@ -7,6 +7,7 @@ import 'package:status_maker/shared/widgets/app_shimmer.dart';
 import 'package:status_maker/shared/widgets/empty_state.dart';
 import 'package:status_maker/features/explore/presentation/explore_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
+import 'package:status_maker/features/statuses/data/likes_store.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
@@ -65,8 +66,13 @@ class _HomeScreenState extends State<HomeScreen> {
       _failed = false;
     });
     try {
+      // Which of these the user has already liked, so the hearts are right on
+      // the first frame instead of all starting empty.
+      await LikesStore.instance.ensureLoaded();
       final items = await _repo.fetchPublic(category: _selected);
       if (!mounted) return;
+      // Seed the counts from server truth before showing them.
+      LikesStore.instance.syncFromRows(items);
       setState(() {
         _statuses = items;
         _loading = false;
@@ -84,6 +90,10 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _selected = name);
     _load();
   }
+
+  /// True when the body is a full-viewport empty/error state rather than a feed.
+  bool get _showsEmptyState =>
+      !_loading && (_failed || _statuses.isEmpty);
 
   @override
   Widget build(BuildContext context) {
@@ -130,9 +140,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             _buildSliverBody(context),
-            SliverToBoxAdapter(
-              child: SizedBox(height: AppDimensions.paddingLarge),
-            ),
+            // Bottom breathing room for the feed only. With an empty state
+            // showing, the body already fills the remaining viewport, and extra
+            // extent below it would make the screen scroll and shift the
+            // centred state off-centre.
+            if (!_showsEmptyState)
+              SliverToBoxAdapter(
+                child: SizedBox(height: AppDimensions.paddingLarge),
+              ),
           ],
         ),
       ),
@@ -196,54 +211,47 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     return Padding(
       padding: EdgeInsets.only(right: 10.w),
+      // No tap feedback of any kind on these chips:
+      //  • GestureDetector, not InkWell, so there's no ink splash.
+      //  • no scale animation — an easeOutBack overshoot pops the chip outward
+      //    and back, which reads as a ripple.
+      //  • a plain Container, not AnimatedContainer. Animating this decoration
+      //    meant lerping a solid colour into a gradient: mid-transition Flutter
+      //    composites a half-faded surface colour under a half-faded peach
+      //    gradient, which is lighter than either end state and flashes. The
+      //    selected colour now just switches.
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: AnimatedScale(
-          scale: isActive ? 1.06 : 1.0,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutBack,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 9.h),
-            decoration: BoxDecoration(
-              gradient: isActive
-                  ? const LinearGradient(colors: AppColors.accentGradient)
-                  : null,
-              color: isActive ? null : AppColors.surface,
-              borderRadius: BorderRadius.circular(24.r),
-              border: Border.all(
-                color: isActive ? Colors.transparent : AppColors.border,
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 9.h),
+          decoration: BoxDecoration(
+            gradient: isActive
+                ? const LinearGradient(colors: AppColors.accentGradient)
+                : null,
+            color: isActive ? null : AppColors.surface,
+            borderRadius: BorderRadius.circular(24.r),
+            border: Border.all(
+              color: isActive ? Colors.transparent : AppColors.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 18.w,
+                color: isActive ? Colors.white : AppColors.accent,
               ),
-              boxShadow: isActive
-                  ? [
-                      BoxShadow(
-                        color: AppColors.accent.withValues(alpha: 0.35),
-                        blurRadius: 12.r,
-                        offset: Offset(0, 4.h),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  size: 18.w,
-                  color: isActive ? Colors.white : AppColors.accent,
+              SizedBox(width: 7.w),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13.sp,
+                  fontWeight: FontWeight.w700,
+                  color: isActive ? Colors.white : AppColors.textPrimary,
                 ),
-                SizedBox(width: 7.w),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w700,
-                    color: isActive ? Colors.white : AppColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -264,30 +272,29 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    // SliverFillRemaining gives the state the whole leftover viewport instead of
+    // just its own content height, so EmptyState's own Center actually centres
+    // it on screen rather than parking it right under the category chips.
     if (_failed) {
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 40.h),
-          child: EmptyState(
-            icon: Icons.cloud_off_rounded,
-            title: S.t('something_wrong'),
-            message: S.t('try_again_msg'),
-            actionLabel: S.t('retry'),
-            onAction: _load,
-          ),
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: EmptyState(
+          icon: Icons.cloud_off_rounded,
+          title: S.t('something_wrong'),
+          message: S.t('try_again_msg'),
+          actionLabel: S.t('retry'),
+          onAction: _load,
         ),
       );
     }
 
     if (_statuses.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 40.h),
-          child: EmptyState(
-            icon: Icons.auto_awesome_outlined,
-            title: S.t('feed_empty_title'),
-            message: S.t('feed_empty_msg'),
-          ),
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: EmptyState(
+          icon: Icons.auto_awesome_outlined,
+          title: S.t('feed_empty_title'),
+          message: S.t('feed_empty_msg'),
         ),
       );
     }

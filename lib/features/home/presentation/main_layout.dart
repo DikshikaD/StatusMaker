@@ -7,6 +7,7 @@ import 'package:status_maker/features/explore/presentation/explore_screen.dart';
 import 'package:status_maker/features/create/presentation/create_screen.dart';
 import 'package:status_maker/features/favorites/presentation/favorites_screen.dart';
 import 'package:status_maker/features/settings/presentation/settings_screen.dart';
+import 'package:status_maker/core/utils/app_navigation.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
 class MainLayout extends StatefulWidget {
@@ -24,15 +25,58 @@ class _NavItem {
 }
 
 class _MainLayoutState extends State<MainLayout> {
-  int _currentIndex = 0;
+  // The selected tab lives in a notifier rather than plain state so switching
+  // tabs rebuilds only the IndexedStack and the nav bar — NOT the five tab
+  // widgets. setState here would recreate all of them on every tap, which on
+  // the heavier tabs (the Search tab paints a lot) is most of the cost of a
+  // switch. See [build] for how the children are kept identical.
+  final ValueNotifier<int> _index = ValueNotifier<int>(0);
 
   // Bumped each time the Home tab is (re)selected so its feed auto-refreshes.
   final ValueNotifier<int> _homeTick = ValueNotifier<int>(0);
 
+  // Bumped when Favorites should jump to "My Creations" and reload it — e.g.
+  // right after the user saves a status.
+  final ValueNotifier<int> _creationsTick = ValueNotifier<int>(0);
+
+  @override
+  void initState() {
+    super.initState();
+    AppNav.request.addListener(_onNavRequest);
+  }
+
   @override
   void dispose() {
+    AppNav.request.removeListener(_onNavRequest);
+    _index.dispose();
     _homeTick.dispose();
+    _creationsTick.dispose();
     super.dispose();
+  }
+
+  void _goToTab(int index) {
+    _index.value = index;
+    // Re-selecting Home refreshes its feed, even if it was already showing.
+    if (index == 0) _homeTick.value++;
+  }
+
+  /// A screen pushed above the shell (an editor) has finished and asked to send
+  /// the user somewhere. Close everything stacked on top of the shell, then
+  /// switch tabs and refresh whatever the destination shows.
+  void _onNavRequest() {
+    final req = AppNav.request.value;
+    if (req == null || !mounted) return;
+    AppNav.request.value = null;
+
+    // Switch first, then pop: the destination is already in place behind the
+    // editor, so it's revealed by the editor's own slide-out rather than
+    // appearing after it.
+    _goToTab(req.index);
+    if (req.showCreations) _creationsTick.value++;
+
+    Navigator.of(context).popUntil(
+      (route) => route.settings.name == AppNav.shellRouteName || route.isFirst,
+    );
   }
 
   // Built fresh on every build (see [build]) so that a theme or language change
@@ -45,7 +89,7 @@ class _MainLayoutState extends State<MainLayout> {
         HomeScreen(refreshSignal: _homeTick),
         ExploreScreen(),
         CreateScreen(),
-        FavoritesScreen(),
+        FavoritesScreen(showCreationsSignal: _creationsTick),
         SettingsScreen(),
       ];
 
@@ -64,15 +108,29 @@ class _MainLayoutState extends State<MainLayout> {
     return ListenableBuilder(
       listenable: Listenable.merge([ThemeController.mode, S.lang]),
       builder: (context, _) {
+        // Built once here and reused for every tab switch. Because the
+        // IndexedStack below is handed the *same* widget instances each time
+        // the index changes, Flutter short-circuits the update and no tab's
+        // content is rebuilt — only which one is shown changes. A new list is
+        // created solely when the theme or language changes, which is exactly
+        // when the tabs do need to be recreated to pick up the new palette.
+        final pages = _pages;
         return Scaffold(
-          body: IndexedStack(index: _currentIndex, children: _pages),
-          bottomNavigationBar: _buildNav(context),
+          body: ValueListenableBuilder<int>(
+            valueListenable: _index,
+            builder: (context, index, __) =>
+                IndexedStack(index: index, children: pages),
+          ),
+          bottomNavigationBar: ValueListenableBuilder<int>(
+            valueListenable: _index,
+            builder: (context, index, __) => _buildNav(index),
+          ),
         );
       },
     );
   }
 
-  Widget _buildNav(BuildContext context) {
+  Widget _buildNav(int current) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -93,7 +151,7 @@ class _MainLayoutState extends State<MainLayout> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: List.generate(
               _items.length,
-              (i) => _navItem(i, _items[i]),
+              (i) => _navItem(i, _items[i], current),
             ),
           ),
         ),
@@ -101,15 +159,11 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  Widget _navItem(int index, _NavItem item) {
-    final selected = index == _currentIndex;
+  Widget _navItem(int index, _NavItem item, int current) {
+    final selected = index == current;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () {
-        setState(() => _currentIndex = index);
-        // Re-selecting Home refreshes its feed automatically.
-        if (index == 0) _homeTick.value++;
-      },
+      onTap: () => _goToTab(index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 280),
         curve: Curves.easeOutCubic,

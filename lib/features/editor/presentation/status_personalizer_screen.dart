@@ -4,13 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/utils/app_navigation.dart';
 import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
+import 'package:status_maker/features/editor/data/fixed_templates.dart';
 import 'package:status_maker/features/editor/data/status_design.dart';
 import 'package:status_maker/features/editor/data/templates_data.dart';
 import 'package:status_maker/features/editor/utils/editor_export.dart';
 import 'package:status_maker/features/editor/utils/sheet_coordinator.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
+import 'package:status_maker/shared/widgets/busy_overlay.dart';
 import 'package:status_maker/features/editor/presentation/photo_reposition_screen.dart';
 import 'package:status_maker/features/editor/widgets/status_canvas.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/add_bar.dart';
@@ -39,6 +42,13 @@ class StatusPersonalizerScreen extends StatefulWidget {
   /// editor has loaded — used by the "Create" flow after a category is chosen.
   final bool showQuotesOnStart;
 
+  /// Set when [initialDesign] uses coordinates authored for a canvas of this
+  /// size rather than this device's canvas — i.e. a ready-made fixed template.
+  /// The design is scaled onto the real canvas on load so it opens looking the
+  /// way it was designed. Null (the default) means the design's coordinates are
+  /// already in this canvas's space, so it loads untouched.
+  final Size? designCanvasSize;
+
   const StatusPersonalizerScreen({
     super.key,
     this.templateName = 'Status',
@@ -47,6 +57,7 @@ class StatusPersonalizerScreen extends StatefulWidget {
     this.initialDesign,
     this.remixOf,
     this.showQuotesOnStart = false,
+    this.designCanvasSize,
   });
 
   @override
@@ -74,8 +85,15 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       final design = widget.initialDesign;
       final t = widget.template;
       if (design != null) {
-        // Reopen a saved creation exactly as it was — fully editable.
-        design.applyTo(_controller);
+        // Reopen a saved creation exactly as it was — fully editable. A
+        // ready-made template comes in with its own canvas coordinates, so map
+        // it onto this device's canvas first (this runs post-frame, so the
+        // canvas has been laid out and its real size is available).
+        final authoredFor = widget.designCanvasSize;
+        final toLoad = authoredFor == null
+            ? design
+            : scaleDesignToCanvas(design, authoredFor, _measureCanvas());
+        toLoad.applyTo(_controller);
         _controller.clearSelection();
         // Undo should only ever revert the user's own edits from here on,
         // never back into "before the saved design was loaded".
@@ -136,6 +154,14 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  /// The canvas's laid-out size. Falls back to the design's own space (i.e. no
+  /// scaling) if it can't be measured, which is safer than guessing.
+  Size _measureCanvas() {
+    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box != null && box.hasSize) return box.size;
+    return widget.designCanvasSize ?? kFixedCanvasSize;
   }
 
   // ---- actions --------------------------------------------------------------
@@ -247,8 +273,15 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
 
   /// Deselect, wait a frame so no selection handles are baked in, then
   /// rasterise the canvas to PNG bytes.
+  ///
+  /// Two frames are awaited, not one. Rasterising at 3x and PNG-encoding it
+  /// costs long enough to drop frames, so the busy overlay is given a frame of
+  /// its own to actually appear first — otherwise the UI locks up while still
+  /// showing the untouched editor, which is what makes it feel broken rather
+  /// than busy.
   Future<Uint8List?> _capture() async {
     _controller.clearSelection();
+    await WidgetsBinding.instance.endOfFrame;
     await WidgetsBinding.instance.endOfFrame;
     return captureCanvas(_canvasKey);
   }
@@ -276,18 +309,21 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
 
   /// System share sheet (WhatsApp etc.) — unchanged behaviour.
   Future<void> _share() async {
-    if (_exporting) return;
+    if (_exporting || _busy) return;
     _exporting = true;
+    setState(() => _busy = true);
     try {
       final bytes = await _capture();
       if (bytes != null) await shareBytes(bytes);
     } finally {
       _exporting = false;
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   /// Save = export the PNG to the device AND store the editable design
-  /// privately in the cloud (so it shows under "My Creations").
+  /// privately in the cloud, then close the editor and show the user their new
+  /// creation. Only on success — a failed save keeps them here to retry.
   Future<void> _onSave() async {
     if (_busy) return;
     setState(() => _busy = true);
@@ -297,26 +333,36 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       // 1) Keep the existing device export (silent — the cloud save reports).
       await saveToFile(bytes);
       // 2) Persist the editable design to the cloud (private).
-      await _cloudSave(bytes: bytes, makePublic: false);
+      final ok = await _cloudSave(bytes: bytes, makePublic: false);
+      // Drop the loader before navigating, so the editor slides away clean
+      // instead of carrying a spinner off-screen with it.
+      if (mounted) setState(() => _busy = false);
+      if (ok) AppNav.goToMyCreations();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  /// Post = store the design publicly so it appears on the Home feed.
+  /// Post = store the design publicly, then close the editor and show the Home
+  /// feed it was posted to.
   Future<void> _onPost() async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
       final bytes = await _capture();
       if (bytes == null) return;
-      await _cloudSave(bytes: bytes, makePublic: true);
+      final ok = await _cloudSave(bytes: bytes, makePublic: true);
+      // Drop the loader before navigating — see _onSave.
+      if (mounted) setState(() => _busy = false);
+      if (ok) AppNav.goToHome();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _cloudSave(
+  /// Returns whether the design actually reached the backend, so the caller
+  /// only navigates away on success.
+  Future<bool> _cloudSave(
       {required Uint8List bytes, required bool makePublic}) async {
     try {
       final design = StatusDesign.fromController(_controller);
@@ -331,9 +377,11 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       );
       _statusId = saved.id;
       _ok(makePublic ? S.t('posted_public') : S.t('saved_cloud'));
+      return true;
     } catch (_) {
       // Never surface raw backend errors to users — keep it friendly.
       _fail(S.t('something_wrong'));
+      return false;
     }
   }
 
@@ -398,6 +446,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
               alignment: Alignment.bottomCenter,
               child: _bottomBar(),
             ),
+            // Loader — sits outside the canvas's RepaintBoundary, so it's never
+            // captured into the exported image.
+            Positioned.fill(child: BusyOverlay(busy: _busy)),
           ],
         ),
       ),
@@ -456,7 +507,6 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
                 icon: Icons.public,
                 filled: false,
                 showLabel: showLabels,
-                busy: _busy,
                 onTap: _busy ? null : _onPost,
               ),
               SizedBox(width: 6.w),
@@ -492,12 +542,14 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     );
   }
 
+  /// A top-bar action pill. Deliberately has no busy state of its own: while an
+  /// action is running the pill just dims (it's disabled), and the single loader
+  /// in the middle of the screen is what reports progress.
   Widget _pill({
     required String label,
     required IconData icon,
     required bool filled,
     required VoidCallback? onTap,
-    bool busy = false,
     bool showLabel = true,
   }) {
     final disabled = onTap == null;
@@ -511,19 +563,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (busy)
-            SizedBox(
-              width: 18.w,
-              height: 18.w,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: filled ? Colors.white : AppColors.textPrimary,
-              ),
-            )
-          else
-            Icon(icon,
-                size: 18.w,
-                color: filled ? Colors.white : AppColors.textPrimary),
+          Icon(icon,
+              size: 18.w,
+              color: filled ? Colors.white : AppColors.textPrimary),
           if (showLabel) ...[
             SizedBox(width: 6.w),
             Text(
@@ -538,7 +580,7 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       ),
     );
     return Opacity(
-      opacity: disabled && !busy ? 0.5 : 1.0,
+      opacity: disabled ? 0.5 : 1.0,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
