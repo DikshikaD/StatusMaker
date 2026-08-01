@@ -1,5 +1,6 @@
 // ============================================================================
-// notify-on-like — turns a `notifications` row into an Android push via FCM.
+// notify-on-like — turns a `notifications` row (like or remix) into an
+// Android push via FCM.
 //
 // Invoked directly by the `notify_on_like` Postgres trigger via pg_net (see
 // supabase/notifications.sql, sections 3.5–4) — no manual Dashboard wiring
@@ -157,8 +158,9 @@ Deno.serve(async (req) => {
     const payload: WebhookPayload = await req.json();
     const record = payload.record;
 
-    // Only act on newly created like notifications.
-    if (payload.type !== 'INSERT' || !record || record.type !== 'like') {
+    // Only act on newly created notifications this function knows how to word.
+    const KNOWN_TYPES = new Set(['like', 'remix']);
+    if (payload.type !== 'INSERT' || !record || !KNOWN_TYPES.has(record.type)) {
       return new Response(JSON.stringify({ skipped: true }), { status: 200 });
     }
 
@@ -200,17 +202,27 @@ Deno.serve(async (req) => {
     }
 
     // Deliberately anonymous: users are anonymous accounts today, so there is no
-    // display name to use. Add a profiles table and this becomes "<name> liked…".
-    const title = 'Someone liked your status ❤️';
-    const body = statusTitle
-      ? `Your status "${statusTitle}" got a new like.`
-      : 'Your status got a new like.';
+    // display name to use. Add a profiles table and this becomes "<name> liked…"
+    // / "<name> remixed…".
+    const copy: Record<string, { title: string; body: (t: string | null) => string }> = {
+      like: {
+        title: 'Someone liked your status ❤️',
+        body: (t) => (t ? `Your status "${t}" got a new like.` : 'Your status got a new like.'),
+      },
+      remix: {
+        title: 'Someone remixed your template 🔁',
+        body: (t) =>
+          t ? `Someone used your template "${t}".` : 'Someone used your template.',
+      },
+    };
+    const { title, body: bodyFor } = copy[record.type];
+    const body = bodyFor(statusTitle);
 
     const accessToken = await getAccessToken(account);
     const results = await Promise.all(
       tokens.map((t) =>
         sendPush(account.project_id, accessToken, t.token, title, body, {
-          type: 'like',
+          type: record.type,
           status_id: record.status_id ?? '',
           notification_id: record.id,
         }).then((outcome) => ({ token: t.token, outcome })),

@@ -16,6 +16,7 @@ class SavedStatus {
   final bool isPublic;
   final String? remixOf;
   final int likesCount;
+  final int remixCount;
   final DateTime? createdAt;
 
   const SavedStatus({
@@ -28,6 +29,7 @@ class SavedStatus {
     this.isPublic = false,
     this.remixOf,
     this.likesCount = 0,
+    this.remixCount = 0,
     this.createdAt,
   });
 
@@ -46,6 +48,7 @@ class SavedStatus {
       isPublic: row['is_public'] as bool? ?? false,
       remixOf: row['remix_of'] as String?,
       likesCount: (row['likes_count'] as num?)?.toInt() ?? 0,
+      remixCount: (row['remix_count'] as num?)?.toInt() ?? 0,
       createdAt: row['created_at'] == null
           ? null
           : DateTime.tryParse(row['created_at'].toString()),

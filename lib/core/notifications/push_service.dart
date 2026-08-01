@@ -52,6 +52,10 @@ class PushService {
   /// way to push a screen from here.
   static final navigatorKey = GlobalKey<NavigatorState>();
 
+  /// Also attached to [MaterialApp] — lets [_showForegroundBanner] show a
+  /// SnackBar without a [BuildContext] of its own, same reason as [navigatorKey].
+  static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
   /// The token last written to the backend, so a refresh reporting the same value
   /// doesn't cause a pointless write on every launch.
   static String? _registeredToken;
@@ -122,14 +126,15 @@ class PushService {
       });
 
       // Foreground messages do NOT draw a tray notification on Android — the OS
-      // assumes the app will show its own UI. Logging them proves delivery works
-      // even when nothing appears on screen, which otherwise looks like failure.
+      // assumes the app will show its own UI. Without the banner below, a push
+      // that arrives while the app is open would be delivered successfully and
+      // still look, to the user, exactly like it never happened.
       FirebaseMessaging.onMessage.listen((m) {
         _log('⬇️  FOREGROUND message received');
         _log('    title: ${m.notification?.title}');
         _log('    body : ${m.notification?.body}');
         _log('    data : ${m.data}');
-        _log('    (no tray notification while the app is open — expected)');
+        _showForegroundBanner(m);
       });
 
       // The user tapped a notification and it opened the app.
@@ -197,15 +202,17 @@ class PushService {
     }
   }
 
-  /// Opens the status a "someone liked your status" push points at, using the
-  /// `status_id` the Edge Function put in the data payload (see
+  /// Opens the status a "someone liked/remixed your status" push points at,
+  /// using the `status_id` the Edge Function put in the data payload (see
   /// supabase/functions/notify-on-like/index.ts).
   ///
   /// Best-effort: the notification is still useful without this — if the
   /// navigator isn't attached yet, or the status was deleted since, this just
   /// logs and does nothing rather than crashing app launch.
+  static const _openableTypes = {'like', 'remix'};
+
   static Future<void> _openFromData(Map<String, dynamic> data) async {
-    if (data['type'] != 'like') return;
+    if (!_openableTypes.contains(data['type'])) return;
     final statusId = data['status_id'] as String?;
     if (statusId == null || statusId.isEmpty) return;
 
@@ -223,5 +230,38 @@ class PushService {
     navigator.push(FadeSlidePageRoute(
       page: TemplateDetailScreen(status: status),
     ));
+  }
+
+  /// Stands in for the tray notification Android withholds while the app is
+  /// in the foreground (see the comment at the [onMessage] listener). Tapping
+  /// "View" reuses [_openFromData] — same destination as a real tap would go.
+  static void _showForegroundBanner(RemoteMessage m) {
+    final messenger = scaffoldMessengerKey.currentState;
+    if (messenger == null) {
+      _log('⚠️  banner skipped: ScaffoldMessenger not attached yet');
+      return;
+    }
+    final title = m.notification?.title;
+    final body = m.notification?.body;
+    if (title == null && body == null) return;
+
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title != null)
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            if (body != null) Text(body),
+          ],
+        ),
+        action: _openableTypes.contains(m.data['type'])
+            ? SnackBarAction(label: 'View', onPressed: () => _openFromData(m.data))
+            : null,
+      ),
+    );
   }
 }

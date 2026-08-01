@@ -202,7 +202,18 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
               );
             },
           ),
-          // Share (beside like)
+          // Remix count comes straight from the row (`statuses.remix_count`,
+          // kept in sync by a DB trigger whenever someone saves a
+          // personalization of this template) — there's nothing to toggle
+          // here, so tapping it just does the same thing as Customize.
+          if (s.remixCount > 0)
+            _iconAction(
+              icon: Icons.repeat,
+              color: AppColors.textSecondary,
+              label: '${s.remixCount}',
+              onTap: widget.onCustomize,
+            ),
+          // Share
           _iconAction(
             icon: Icons.share_outlined,
             color: AppColors.textSecondary,

@@ -17,7 +17,7 @@ create table if not exists public.notifications (
   recipient_id uuid not null references auth.users(id) on delete cascade,
   actor_id     uuid not null references auth.users(id) on delete cascade,
   status_id    uuid references public.statuses(id) on delete cascade,
-  type         text not null,             -- 'like' today; room for 'remix', 'follow', …
+  type         text not null,             -- 'like' or 'remix' today; room for 'follow', …
   read_at      timestamptz,               -- null = unread (drives the bell badge)
   created_at   timestamptz not null default now()
 );
@@ -107,6 +107,56 @@ create extension if not exists pg_net with schema extensions;
 --   );
 
 -- ---------------------------------------------------------------------------
+-- 3.6) push_notification — shared by every "insert a notification" trigger
+--
+-- Pulled out of notify_on_like() so notify_on_remix() (and any future event)
+-- calls the exact same, exception-safe path instead of copy-pasting it.
+-- ---------------------------------------------------------------------------
+create or replace function public.push_notification(n public.notifications)
+returns void language plpgsql security definer as $$
+declare
+  fn_url text;
+  fn_key text;
+begin
+  -- Best-effort: if the Vault secrets haven't been set yet, the notification
+  -- row (and the in-app bell) still exists — only the push is skipped.
+  select decrypted_secret into fn_url
+    from vault.decrypted_secrets where name = 'notify_on_like_url';
+  select decrypted_secret into fn_key
+    from vault.decrypted_secrets where name = 'notify_on_like_key';
+
+  if fn_url is null or fn_key is null then
+    return;
+  end if;
+
+  -- Wrapped on its own: pg_net's function/table names have moved across
+  -- versions, and this call must never be able to take the triggering write
+  -- down with it if pg_net is missing, misconfigured, or errors for any reason.
+  begin
+    perform net.http_post(
+      url     := fn_url,
+      headers := jsonb_build_object(
+                   'Content-Type', 'application/json',
+                   'Authorization', 'Bearer ' || fn_key
+                 ),
+      body    := jsonb_build_object(
+                   'type', 'INSERT',
+                   'table', 'notifications',
+                   'record', jsonb_build_object(
+                     'id', n.id,
+                     'recipient_id', n.recipient_id,
+                     'actor_id', n.actor_id,
+                     'status_id', n.status_id,
+                     'type', n.type
+                   )
+                 )
+    );
+  exception when others then
+    raise warning 'push_notification: push call failed: %', sqlerrm;
+  end;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- 4) Create / remove a notification when a status is liked / unliked, and push
 --    the Edge Function directly on insert — no manual Dashboard webhook needed.
 --
@@ -117,8 +167,6 @@ returns trigger language plpgsql security definer as $$
 declare
   owner_id  uuid;
   new_row   public.notifications%rowtype;
-  fn_url    text;
-  fn_key    text;
 begin
   if (tg_op = 'INSERT') then
     select user_id into owner_id from public.statuses where id = new.status_id;
@@ -132,41 +180,7 @@ begin
       values (owner_id, new.user_id, new.status_id, 'like')
       returning * into new_row;
 
-    -- Best-effort: if the Vault secrets above haven't been set yet, the like
-    -- and the in-app bell notification above still succeed — only the push
-    -- is skipped, and only for this row.
-    select decrypted_secret into fn_url
-      from vault.decrypted_secrets where name = 'notify_on_like_url';
-    select decrypted_secret into fn_key
-      from vault.decrypted_secrets where name = 'notify_on_like_key';
-
-    -- Wrapped on its own: pg_net's function/table names have moved across
-    -- versions, and this call must never be able to take the like down with
-    -- it if pg_net is missing, misconfigured, or errors for any reason.
-    if fn_url is not null and fn_key is not null then
-      begin
-        perform net.http_post(
-          url     := fn_url,
-          headers := jsonb_build_object(
-                       'Content-Type', 'application/json',
-                       'Authorization', 'Bearer ' || fn_key
-                     ),
-          body    := jsonb_build_object(
-                       'type', 'INSERT',
-                       'table', 'notifications',
-                       'record', jsonb_build_object(
-                         'id', new_row.id,
-                         'recipient_id', new_row.recipient_id,
-                         'actor_id', new_row.actor_id,
-                         'status_id', new_row.status_id,
-                         'type', new_row.type
-                       )
-                     )
-        );
-      exception when others then
-        raise warning 'notify_on_like: push call failed: %', sqlerrm;
-      end;
-    end if;
+    perform public.push_notification(new_row);
 
     return new;
 
@@ -191,6 +205,76 @@ create trigger notify_like_ins after insert on public.likes
 drop trigger if exists notify_like_del on public.likes;
 create trigger notify_like_del after delete on public.likes
   for each row execute function public.notify_on_like();
+
+-- ---------------------------------------------------------------------------
+-- 4.5) Remixes: count + notify the original creator when someone uses their
+--      template.
+--
+-- `remix_of` is set exactly once, at insert (see StatusRepository.saveDesign —
+-- it's only ever passed on the very first save of a new row, never on later
+-- updates to that same row), so this can't double-count a status being edited
+-- further after its first save.
+-- ---------------------------------------------------------------------------
+alter table public.statuses
+  add column if not exists remix_count integer not null default 0;
+
+create or replace function public.sync_remix_count()
+returns trigger language plpgsql security definer as $$
+begin
+  if (tg_op = 'INSERT') then
+    if new.remix_of is not null then
+      update public.statuses set remix_count = remix_count + 1 where id = new.remix_of;
+    end if;
+    return new;
+  elsif (tg_op = 'DELETE') then
+    if old.remix_of is not null then
+      update public.statuses set remix_count = greatest(remix_count - 1, 0) where id = old.remix_of;
+    end if;
+    return old;
+  end if;
+  return null;
+end $$;
+
+drop trigger if exists remix_count_ins on public.statuses;
+create trigger remix_count_ins after insert on public.statuses
+  for each row execute function public.sync_remix_count();
+
+drop trigger if exists remix_count_del on public.statuses;
+create trigger remix_count_del after delete on public.statuses
+  for each row execute function public.sync_remix_count();
+
+create or replace function public.notify_on_remix()
+returns trigger language plpgsql security definer as $$
+declare
+  owner_id uuid;
+  new_row  public.notifications%rowtype;
+begin
+  if new.remix_of is null then
+    return new;
+  end if;
+
+  select user_id into owner_id from public.statuses where id = new.remix_of;
+
+  -- Remixing your own template notifies nobody.
+  if owner_id is null or owner_id = new.user_id then
+    return new;
+  end if;
+
+  insert into public.notifications (recipient_id, actor_id, status_id, type)
+    values (owner_id, new.user_id, new.remix_of, 'remix')
+    returning * into new_row;
+
+  perform public.push_notification(new_row);
+
+  return new;
+end $$;
+
+-- Separate trigger from sync_remix_count for the same reason notify_on_like
+-- is separate from likes_count: a notification failure must never be able to
+-- break the save.
+drop trigger if exists notify_remix_ins on public.statuses;
+create trigger notify_remix_ins after insert on public.statuses
+  for each row execute function public.notify_on_remix();
 
 -- ---------------------------------------------------------------------------
 -- 5) Housekeeping: drop read notifications older than 30 days

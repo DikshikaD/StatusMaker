@@ -62,6 +62,7 @@ class MyApp extends StatelessWidget {
                 return child ?? const SizedBox.shrink();
               },
               navigatorKey: PushService.navigatorKey,
+              scaffoldMessengerKey: PushService.scaffoldMessengerKey,
               locale: Locale(lang),
               supportedLocales: const [Locale('en'), Locale('hi')],
               localizationsDelegates: const [

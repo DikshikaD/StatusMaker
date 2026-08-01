@@ -180,6 +180,13 @@ class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
                     );
                   },
                 ),
+                if (s.remixCount > 0)
+                  _actionIcon(
+                    icon: Icons.repeat,
+                    color: AppColors.textPrimary,
+                    label: '${s.remixCount}',
+                    onTap: _openEditor,
+                  ),
                 _actionIcon(
                   icon: Icons.ios_share,
                   color: AppColors.textPrimary,
