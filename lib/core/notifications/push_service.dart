@@ -3,7 +3,11 @@ import 'dart:io' show Platform;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
+import 'package:status_maker/core/utils/page_transitions.dart';
+import 'package:status_maker/features/preview/presentation/template_detail_screen.dart';
+import 'package:status_maker/features/statuses/data/status_repository.dart';
 
 /// Every line this file prints starts with this tag, so the whole push story can
 /// be read with one filter:
@@ -42,6 +46,11 @@ class PushService {
   PushService._();
 
   static bool _initialized = false;
+
+  /// Attached to [MaterialApp] in main.dart. Notification taps arrive on
+  /// listeners that have no [BuildContext] of their own — this is the only
+  /// way to push a screen from here.
+  static final navigatorKey = GlobalKey<NavigatorState>();
 
   /// The token last written to the backend, so a refresh reporting the same value
   /// doesn't cause a pointless write on every launch.
@@ -126,12 +135,14 @@ class PushService {
       // The user tapped a notification and it opened the app.
       FirebaseMessaging.onMessageOpenedApp.listen((m) {
         _log('👆 notification tapped (app was backgrounded): ${m.data}');
+        _openFromData(m.data);
       });
 
       // Same, but the app was fully closed and this launched it.
       final initial = await messaging.getInitialMessage();
       if (initial != null) {
         _log('👆 app opened from a notification (was closed): ${initial.data}');
+        _openFromData(initial.data);
       }
 
       _log('──────── push ready ────────');
@@ -184,5 +195,33 @@ class PushService {
       _log('   (if this says the table is missing, run '
           'supabase/notifications.sql)');
     }
+  }
+
+  /// Opens the status a "someone liked your status" push points at, using the
+  /// `status_id` the Edge Function put in the data payload (see
+  /// supabase/functions/notify-on-like/index.ts).
+  ///
+  /// Best-effort: the notification is still useful without this — if the
+  /// navigator isn't attached yet, or the status was deleted since, this just
+  /// logs and does nothing rather than crashing app launch.
+  static Future<void> _openFromData(Map<String, dynamic> data) async {
+    if (data['type'] != 'like') return;
+    final statusId = data['status_id'] as String?;
+    if (statusId == null || statusId.isEmpty) return;
+
+    final status = await StatusRepository().fetchById(statusId);
+    if (status == null) {
+      _log('↩️  tap ignored: status $statusId no longer exists');
+      return;
+    }
+
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) {
+      _log('⚠️  tap ignored: navigator not attached yet');
+      return;
+    }
+    navigator.push(FadeSlidePageRoute(
+      page: TemplateDetailScreen(status: status),
+    ));
   }
 }

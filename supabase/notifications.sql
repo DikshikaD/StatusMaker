@@ -84,14 +84,41 @@ create policy device_tokens_delete on public.device_tokens
   for delete using ( user_id = auth.uid() );
 
 -- ---------------------------------------------------------------------------
--- 4) Create / remove a notification when a status is liked / unliked
+-- 3.5) pg_net + Vault — lets a trigger call the Edge Function directly
+--
+-- pg_net queues an async HTTP call from inside Postgres (fire-and-forget: it
+-- runs in the background, so a slow/dead Edge Function can never block or fail
+-- the like insert itself). Vault stores the two values the trigger needs to
+-- make that call — the Edge Function's URL and the service-role key it must
+-- present — encrypted at rest, so nothing secret sits in this file or in git.
+-- ---------------------------------------------------------------------------
+create extension if not exists pg_net with schema extensions;
+
+-- Run these two once, filling in your real project ref and service-role key
+-- (Dashboard → Project Settings → API). Safe to re-run: each call replaces the
+-- previous value for that name.
+--   select vault.create_secret(
+--     'https://<project-ref>.functions.supabase.co/notify-on-like',
+--     'notify_on_like_url'
+--   );
+--   select vault.create_secret(
+--     '<service-role-key>',
+--     'notify_on_like_key'
+--   );
+
+-- ---------------------------------------------------------------------------
+-- 4) Create / remove a notification when a status is liked / unliked, and push
+--    the Edge Function directly on insert — no manual Dashboard webhook needed.
 --
 -- Runs inside the same statement as the like itself — no polling, no server.
 -- ---------------------------------------------------------------------------
 create or replace function public.notify_on_like()
 returns trigger language plpgsql security definer as $$
 declare
-  owner_id uuid;
+  owner_id  uuid;
+  new_row   public.notifications%rowtype;
+  fn_url    text;
+  fn_key    text;
 begin
   if (tg_op = 'INSERT') then
     select user_id into owner_id from public.statuses where id = new.status_id;
@@ -102,7 +129,45 @@ begin
     end if;
 
     insert into public.notifications (recipient_id, actor_id, status_id, type)
-      values (owner_id, new.user_id, new.status_id, 'like');
+      values (owner_id, new.user_id, new.status_id, 'like')
+      returning * into new_row;
+
+    -- Best-effort: if the Vault secrets above haven't been set yet, the like
+    -- and the in-app bell notification above still succeed — only the push
+    -- is skipped, and only for this row.
+    select decrypted_secret into fn_url
+      from vault.decrypted_secrets where name = 'notify_on_like_url';
+    select decrypted_secret into fn_key
+      from vault.decrypted_secrets where name = 'notify_on_like_key';
+
+    -- Wrapped on its own: pg_net's function/table names have moved across
+    -- versions, and this call must never be able to take the like down with
+    -- it if pg_net is missing, misconfigured, or errors for any reason.
+    if fn_url is not null and fn_key is not null then
+      begin
+        perform net.http_post(
+          url     := fn_url,
+          headers := jsonb_build_object(
+                       'Content-Type', 'application/json',
+                       'Authorization', 'Bearer ' || fn_key
+                     ),
+          body    := jsonb_build_object(
+                       'type', 'INSERT',
+                       'table', 'notifications',
+                       'record', jsonb_build_object(
+                         'id', new_row.id,
+                         'recipient_id', new_row.recipient_id,
+                         'actor_id', new_row.actor_id,
+                         'status_id', new_row.status_id,
+                         'type', new_row.type
+                       )
+                     )
+        );
+      exception when others then
+        raise warning 'notify_on_like: push call failed: %', sqlerrm;
+      end;
+    end if;
+
     return new;
 
   elsif (tg_op = 'DELETE') then
@@ -142,15 +207,17 @@ returns void language sql security definer as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- 6) NEXT STEP — wire up push (see supabase/functions/notify-on-like/)
+-- 6) NEXT STEP — deploy the Edge Function and set the two Vault secrets above
+--    (see supabase/functions/notify-on-like/ for the deploy commands).
 --
--- After deploying the Edge Function, add the webhook that calls it:
---   Dashboard → Database → Webhooks → Create a new hook
---     Table:      public.notifications
---     Events:     Insert
---     Type:       Supabase Edge Functions → notify-on-like
---     HTTP header: Authorization: Bearer <YOUR SERVICE_ROLE KEY>
+-- Once both secrets exist, the trigger in step 4 calls the function directly
+-- on every like — no Dashboard webhook to configure or forget. Until the
+-- secrets are set, everything above still works, it just powers the in-app
+-- bell only, with no push (see the "best-effort" note in notify_on_like()).
 --
--- Until that exists, everything above still works — it just powers the in-app
--- bell only, with no push.
+-- Alternative: if you'd rather manage this from the Dashboard instead of
+-- Vault, you can still skip step 3.5/4's pg_net call and wire a
+-- Database Webhook (Dashboard → Database → Webhooks) on public.notifications
+-- INSERT → Edge Function notify-on-like instead. Pick one path, not both, or
+-- every like will push twice.
 -- ---------------------------------------------------------------------------

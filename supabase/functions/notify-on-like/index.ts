@@ -1,8 +1,11 @@
 // ============================================================================
 // notify-on-like — turns a `notifications` row into an Android push via FCM.
 //
-// Triggered by a Database Webhook on INSERT into public.notifications (see the
-// setup notes at the bottom of supabase/notifications.sql).
+// Invoked directly by the `notify_on_like` Postgres trigger via pg_net (see
+// supabase/notifications.sql, sections 3.5–4) — no manual Dashboard wiring
+// needed once its two Vault secrets are set. It also accepts the same payload
+// shape from a Database Webhook, if you prefer that instead (see the note at
+// the bottom of notifications.sql).
 //
 // Deploy:
 //   supabase functions deploy notify-on-like
@@ -10,6 +13,11 @@
 //
 // The service-account JSON is a credential: keep it out of git and out of chat —
 // set it as a secret in the dashboard or with the CLI above.
+//
+// verify_jwt stays ON (the default) for this function: the trigger presents
+// the service-role key as its bearer token, which is itself a valid JWT, so
+// legitimate calls pass while anyone without that key is rejected before this
+// code ever runs.
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';

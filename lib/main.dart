@@ -61,6 +61,7 @@ class MyApp extends StatelessWidget {
                 ScreenUtil.init(context);
                 return child ?? const SizedBox.shrink();
               },
+              navigatorKey: PushService.navigatorKey,
               locale: Locale(lang),
               supportedLocales: const [Locale('en'), Locale('hi')],
               localizationsDelegates: const [

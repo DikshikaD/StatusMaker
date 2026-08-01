@@ -175,6 +175,23 @@ class StatusRepository {
     }
   }
 
+  /// A single status by id, or null if it doesn't exist (or is private and
+  /// isn't the caller's own) — RLS enforces that, this just surfaces "not
+  /// found" instead of throwing. Used to open the status a push notification
+  /// (e.g. "someone liked your status") points at.
+  Future<SavedStatus?> fetchById(String id) async {
+    if (!await SupabaseService.ensureReady()) return null;
+    try {
+      final row =
+          await _db.from(_table).select().eq('id', id).maybeSingle();
+      if (row == null) return null;
+      return SavedStatus.fromRow((row as Map).cast<String, dynamic>());
+    } catch (e) {
+      debugPrint('StatusRepository.fetchById failed: $e');
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Likes
   //
