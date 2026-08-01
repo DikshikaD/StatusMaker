@@ -26,7 +26,8 @@ class AppColors {
   static const Color lightTextPrimary = Color(0xFF111A24); // almost-black navy
   static const Color lightTextSecondary = Color(0xFF6B7280); // gray
   static const Color lightBorder = Color(0xFFE5E7EB);
-  static const Color lightCard = Color(0xFFF3F4F6);
+  static const Color lightCard = Color(0xFFECECEC);
+
 
   // ---- Dark palette (raw values) ----
   static const Color darkBackground = Color(0xFF0F172A);

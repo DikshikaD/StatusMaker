@@ -24,6 +24,11 @@ dependencies:
   # Backend (auth, database, storage)
   supabase_flutter: ^2.12.4
 
+  # Push notifications (someone liked your status) — delivered by FCM so they
+  # arrive with the app closed. See supabase/functions/notify-on-like/.
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.5
+
   # Save & Share (canvas export)
   path_provider: ^2.1.0
   share_plus: ^10.0.0

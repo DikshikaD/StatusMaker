@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Id of the notification channel FCM pushes land in. Referenced from
+         AndroidManifest.xml and created by PushService on first launch — both
+         sides must use this same id. -->
+    <string name="default_notification_channel_id">status_maker_likes</string>
+</resources>

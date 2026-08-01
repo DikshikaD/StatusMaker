@@ -220,6 +220,15 @@ class S {
     'save': ['Save', 'सेव'],
     'share': ['Share', 'शेयर'],
     'post': ['Post', 'पोस्ट'],
+
+    // editor share sheet (WhatsApp / Instagram / Facebook / system chooser)
+    'share_to': ['Share your status', 'अपना स्टेटस शेयर करें'],
+    'share_to_msg': [
+      'Pick where this design should go.',
+      'चुनें कि यह डिज़ाइन कहाँ भेजना है।'
+    ],
+    'share_more': ['More apps', 'अन्य ऐप'],
+    'not_installed': ['Not installed', 'इंस्टॉल नहीं है'],
     'saved_cloud': ['Saved to your creations', 'आपकी रचनाओं में सेव हो गया'],
     'posted_public': [
       'Posted! It\'s now on the community feed.',

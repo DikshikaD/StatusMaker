@@ -1,0 +1,230 @@
+// ============================================================================
+// notify-on-like — turns a `notifications` row into an Android push via FCM.
+//
+// Triggered by a Database Webhook on INSERT into public.notifications (see the
+// setup notes at the bottom of supabase/notifications.sql).
+//
+// Deploy:
+//   supabase functions deploy notify-on-like
+//   supabase secrets set FIREBASE_SERVICE_ACCOUNT="$(cat service-account.json)"
+//
+// The service-account JSON is a credential: keep it out of git and out of chat —
+// set it as a secret in the dashboard or with the CLI above.
+// ============================================================================
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+interface WebhookPayload {
+  type: 'INSERT' | 'UPDATE' | 'DELETE';
+  table: string;
+  record: {
+    id: string;
+    recipient_id: string;
+    actor_id: string;
+    status_id: string | null;
+    type: string;
+  } | null;
+}
+
+interface ServiceAccount {
+  project_id: string;
+  client_email: string;
+  private_key: string;
+}
+
+// ---- Google auth -----------------------------------------------------------
+// FCM's HTTP v1 API wants an OAuth access token, which means signing a JWT with
+// the service account's private key. Done with Web Crypto so the function has
+// no dependency beyond the Supabase client.
+
+function base64url(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function encodeJson(value: unknown): string {
+  return base64url(new TextEncoder().encode(JSON.stringify(value)));
+}
+
+/** Turns the PEM private key from the service account into a signing key. */
+async function importPrivateKey(pem: string): Promise<CryptoKey> {
+  const body = pem
+    .replace('-----BEGIN PRIVATE KEY-----', '')
+    .replace('-----END PRIVATE KEY-----', '')
+    .replace(/\s/g, '');
+  const der = Uint8Array.from(atob(body), (c) => c.charCodeAt(0));
+  return crypto.subtle.importKey(
+    'pkcs8',
+    der,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+}
+
+async function getAccessToken(account: ServiceAccount): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const claim = {
+    iss: account.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+  };
+
+  const unsigned = `${encodeJson({ alg: 'RS256', typ: 'JWT' })}.${encodeJson(claim)}`;
+  const key = await importPrivateKey(account.private_key);
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    key,
+    new TextEncoder().encode(unsigned),
+  );
+  const jwt = `${unsigned}.${base64url(new Uint8Array(signature))}`;
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`token exchange failed: ${res.status} ${await res.text()}`);
+  }
+  return (await res.json()).access_token;
+}
+
+// ---- FCM -------------------------------------------------------------------
+
+/**
+ * Sends one push. Returns 'gone' when Google says the token is dead, so the
+ * caller can delete it — otherwise dead tokens accumulate forever and every
+ * send wastes a request on them.
+ */
+async function sendPush(
+  projectId: string,
+  accessToken: string,
+  token: string,
+  title: string,
+  body: string,
+  data: Record<string, string>,
+): Promise<'sent' | 'gone' | 'failed'> {
+  const res = await fetch(
+    `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: {
+          token,
+          // `notification` (not data-only) is what lets Android draw the tray
+          // item itself while the app is closed — no Dart code needs to run.
+          notification: { title, body },
+          data,
+          android: { priority: 'high', notification: { sound: 'default' } },
+        },
+      }),
+    },
+  );
+
+  if (res.ok) return 'sent';
+
+  const text = await res.text();
+  // 404 UNREGISTERED / 400 INVALID_ARGUMENT on the token = uninstalled or stale.
+  if (res.status === 404 || text.includes('UNREGISTERED')) return 'gone';
+  console.error(`fcm send failed (${res.status}): ${text}`);
+  return 'failed';
+}
+
+// ---- handler ---------------------------------------------------------------
+
+Deno.serve(async (req) => {
+  try {
+    const payload: WebhookPayload = await req.json();
+    const record = payload.record;
+
+    // Only act on newly created like notifications.
+    if (payload.type !== 'INSERT' || !record || record.type !== 'like') {
+      return new Response(JSON.stringify({ skipped: true }), { status: 200 });
+    }
+
+    const rawAccount = Deno.env.get('FIREBASE_SERVICE_ACCOUNT');
+    if (!rawAccount) throw new Error('FIREBASE_SERVICE_ACCOUNT is not set');
+    const account: ServiceAccount = JSON.parse(rawAccount);
+
+    // Service-role client: it must read another user's device tokens, which no
+    // user-scoped client is allowed to do under the RLS policies.
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    );
+
+    const { data: tokens, error } = await supabase
+      .from('device_tokens')
+      .select('token')
+      .eq('user_id', record.recipient_id);
+    if (error) throw error;
+
+    // Nobody registered a device (or they only ever used the web) — the bell row
+    // still exists, so nothing is lost.
+    if (!tokens || tokens.length === 0) {
+      return new Response(JSON.stringify({ sent: 0, reason: 'no tokens' }), {
+        status: 200,
+      });
+    }
+
+    // The status title makes the notification concrete ("… liked 'Good
+    // Morning'"). Best-effort: a missing title just falls back to generic copy.
+    let statusTitle: string | null = null;
+    if (record.status_id) {
+      const { data: status } = await supabase
+        .from('statuses')
+        .select('title')
+        .eq('id', record.status_id)
+        .maybeSingle();
+      statusTitle = status?.title ?? null;
+    }
+
+    // Deliberately anonymous: users are anonymous accounts today, so there is no
+    // display name to use. Add a profiles table and this becomes "<name> liked…".
+    const title = 'Someone liked your status ❤️';
+    const body = statusTitle
+      ? `Your status "${statusTitle}" got a new like.`
+      : 'Your status got a new like.';
+
+    const accessToken = await getAccessToken(account);
+    const results = await Promise.all(
+      tokens.map((t) =>
+        sendPush(account.project_id, accessToken, t.token, title, body, {
+          type: 'like',
+          status_id: record.status_id ?? '',
+          notification_id: record.id,
+        }).then((outcome) => ({ token: t.token, outcome })),
+      ),
+    );
+
+    const dead = results.filter((r) => r.outcome === 'gone').map((r) => r.token);
+    if (dead.length > 0) {
+      await supabase.from('device_tokens').delete().in('token', dead);
+    }
+
+    return new Response(
+      JSON.stringify({
+        sent: results.filter((r) => r.outcome === 'sent').length,
+        pruned: dead.length,
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  } catch (e) {
+    console.error('notify-on-like failed:', e);
+    // 200 on purpose: a webhook retry storm would not fix a bad credential, and
+    // a lost push is far less bad than a hot loop. The error is in the logs.
+    return new Response(JSON.stringify({ error: String(e) }), { status: 200 });
+  }
+});

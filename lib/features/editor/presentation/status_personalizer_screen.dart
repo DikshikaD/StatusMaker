@@ -13,7 +13,9 @@ import 'package:status_maker/features/editor/data/templates_data.dart';
 import 'package:status_maker/features/editor/utils/editor_export.dart';
 import 'package:status_maker/features/editor/utils/sheet_coordinator.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
+import 'package:status_maker/shared/utils/native_share.dart';
 import 'package:status_maker/shared/widgets/busy_overlay.dart';
+import 'package:status_maker/shared/widgets/share_target_dialog.dart';
 import 'package:status_maker/features/editor/presentation/photo_reposition_screen.dart';
 import 'package:status_maker/features/editor/widgets/status_canvas.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/add_bar.dart';
@@ -307,14 +309,25 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     return widget.category.isNotEmpty ? widget.category : 'My Status';
   }
 
-  /// System share sheet (WhatsApp etc.) — unchanged behaviour.
+  /// Share = ask where it's going (WhatsApp / Instagram / Facebook / any other
+  /// app), then export and hand the PNG straight to that destination.
+  ///
+  /// The popup is shown *before* the capture so it opens instantly, and the
+  /// loader only covers the export that follows the user's choice.
   Future<void> _share() async {
     if (_exporting || _busy) return;
+    final target = await showShareTargetDialog(context);
+    if (target == null || !mounted) return;
+
     _exporting = true;
     setState(() => _busy = true);
     try {
       final bytes = await _capture();
-      if (bytes != null) await shareBytes(bytes);
+      if (bytes == null) return;
+      await NativeShare.shareImage(
+        path: await writeTempPng(bytes),
+        target: target,
+      );
     } finally {
       _exporting = false;
       if (mounted) setState(() => _busy = false);

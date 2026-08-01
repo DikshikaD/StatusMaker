@@ -16,6 +16,8 @@ import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 import 'package:status_maker/features/editor/widgets/fixed_template_canvas.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/locked_toolbars.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
+import 'package:status_maker/shared/utils/native_share.dart';
+import 'package:status_maker/shared/widgets/share_target_dialog.dart';
 
 /// The LOCKED editor for a [FixedTemplate]. The design (positions, fonts,
 /// colors, decorations) can't be changed — the user can only:
@@ -235,14 +237,26 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     return _t.name;
   }
 
+  /// Ask where it's going (WhatsApp / Instagram / Facebook / any other app)
+  /// first, then export and hand the PNG straight to that destination. The popup
+  /// opens before the capture so it appears instantly.
   Future<void> _share() async {
-    if (_exporting) return;
+    if (_exporting || _busy) return;
+    final target = await showShareTargetDialog(context);
+    if (target == null || !mounted) return;
+
     _exporting = true;
+    setState(() => _busy = true);
     try {
       final bytes = await _capture();
-      if (bytes != null) await shareBytes(bytes);
+      if (bytes == null) return;
+      await NativeShare.shareImage(
+        path: await writeTempPng(bytes),
+        target: target,
+      );
     } finally {
       _exporting = false;
+      if (mounted) setState(() => _busy = false);
     }
   }
 

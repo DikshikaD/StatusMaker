@@ -1,0 +1,188 @@
+import 'dart:io' show Platform;
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
+import 'package:status_maker/core/supabase/supabase_service.dart';
+
+/// Every line this file prints starts with this tag, so the whole push story can
+/// be read with one filter:
+///
+/// ```
+/// flutter run | grep PUSH          # or:  adb logcat | grep PUSH
+/// ```
+const String _tag = '[PUSH]';
+
+void _log(String message) => debugPrint('$_tag $message');
+
+/// Handles a push that arrives while the app is fully closed or backgrounded.
+///
+/// Required by firebase_messaging even though Android draws the tray
+/// notification itself from the `notification` payload the Edge Function sends.
+/// The log line is what proves delivery reached this device even when no UI ran.
+///
+/// Must be a top-level function — it runs in its own isolate, with none of the
+/// app's state available.
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  debugPrint('$_tag ⬇️  BACKGROUND message received');
+  debugPrint('$_tag     title: ${message.notification?.title}');
+  debugPrint('$_tag     body : ${message.notification?.body}');
+  debugPrint('$_tag     data : ${message.data}');
+}
+
+/// Registers this device with FCM so "someone liked your status" can arrive with
+/// the app closed.
+///
+/// Follows the same rule as [SupabaseService]: never throws to the caller. If
+/// Firebase is misconfigured, the user denies permission, or the device has no
+/// Play Services, the app simply runs without push instead of failing to start —
+/// but it says loudly in the log which of those happened.
+class PushService {
+  PushService._();
+
+  static bool _initialized = false;
+
+  /// The token last written to the backend, so a refresh reporting the same value
+  /// doesn't cause a pointless write on every launch.
+  static String? _registeredToken;
+
+  /// This device's current FCM token, once known. Handy for pasting into
+  /// Firebase Console → Messaging → Send test message.
+  static String? get token => _registeredToken;
+
+  /// Call once in main(), after [SupabaseService.init] — registration needs a
+  /// user id to attach the token to.
+  static Future<void> init() async {
+    _log('──────── push init ────────');
+
+    // Android-only for now: iOS additionally needs an APNs key and a paid Apple
+    // Developer account, neither of which is set up.
+    if (!Platform.isAndroid) {
+      _log('❌ skipped: ${Platform.operatingSystem} is not supported yet '
+          '(Android only)');
+      return;
+    }
+
+    try {
+      if (!_initialized) {
+        final app = await Firebase.initializeApp();
+        _log('✅ Firebase connected');
+        _log('   project : ${app.options.projectId}');
+        _log('   appId   : ${app.options.appId}');
+        FirebaseMessaging.onBackgroundMessage(
+            firebaseMessagingBackgroundHandler);
+        _initialized = true;
+      }
+
+      final messaging = FirebaseMessaging.instance;
+
+      // Android 13+ shows the system permission dialog here. Older versions
+      // return authorized immediately.
+      final settings = await messaging.requestPermission();
+      _log('🔔 permission: ${settings.authorizationStatus.name}');
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        _log('❌ user denied notifications — no push will be delivered. '
+            'Enable it in Android Settings → Apps → Status Maker → '
+            'Notifications.');
+        return;
+      }
+
+      _log('⏳ requesting FCM token…');
+      final fcmToken = await messaging.getToken();
+      if (fcmToken == null) {
+        _log('❌ FCM returned no token. Usually means Google Play Services is '
+            'missing or google-services.json does not match this package.');
+        return;
+      }
+      // Printed in full and on its own line: this is the value you paste into
+      // Firebase Console to send a test push straight to this device.
+      _log('🎫 FCM TOKEN ↓↓↓');
+      _log(fcmToken);
+      _log('🎫 FCM TOKEN ↑↑↑ (${fcmToken.length} chars)');
+
+      await _register(fcmToken);
+
+      // Tokens rotate (app restore, cache clear, long idle). Without this the
+      // backend keeps pushing to an address the phone no longer answers on.
+      messaging.onTokenRefresh.listen((t) {
+        _log('♻️  token refreshed by FCM — re-registering');
+        _register(t);
+      }, onError: (Object e) {
+        _log('⚠️  token refresh stream failed: $e');
+      });
+
+      // Foreground messages do NOT draw a tray notification on Android — the OS
+      // assumes the app will show its own UI. Logging them proves delivery works
+      // even when nothing appears on screen, which otherwise looks like failure.
+      FirebaseMessaging.onMessage.listen((m) {
+        _log('⬇️  FOREGROUND message received');
+        _log('    title: ${m.notification?.title}');
+        _log('    body : ${m.notification?.body}');
+        _log('    data : ${m.data}');
+        _log('    (no tray notification while the app is open — expected)');
+      });
+
+      // The user tapped a notification and it opened the app.
+      FirebaseMessaging.onMessageOpenedApp.listen((m) {
+        _log('👆 notification tapped (app was backgrounded): ${m.data}');
+      });
+
+      // Same, but the app was fully closed and this launched it.
+      final initial = await messaging.getInitialMessage();
+      if (initial != null) {
+        _log('👆 app opened from a notification (was closed): ${initial.data}');
+      }
+
+      _log('──────── push ready ────────');
+    } catch (e) {
+      _log('❌ init failed: $e');
+    }
+  }
+
+  /// Stores [token] against the current user, so the Edge Function can find it.
+  static Future<void> _register(String? token) async {
+    if (token == null || token.isEmpty) {
+      _log('⚠️  register skipped: empty token');
+      return;
+    }
+    if (token == _registeredToken) {
+      _log('↩️  register skipped: token already saved this session');
+      return;
+    }
+
+    // A token with nobody to attach it to is useless — and the row's user_id is
+    // NOT NULL, so this would fail anyway.
+    if (!await SupabaseService.ensureReady()) {
+      _log('❌ register failed: Supabase not ready — '
+          '${SupabaseService.statusMessage}');
+      return;
+    }
+    final userId = SupabaseService.userId;
+    if (userId == null) {
+      _log('❌ register failed: no signed-in user to attach the token to');
+      return;
+    }
+
+    try {
+      _log('⏳ saving token to device_tokens for user $userId …');
+      // Upsert on the token (its primary key): re-registering the same phone
+      // updates the row rather than erroring, and a phone that changes hands
+      // moves to its new owner instead of keeping the old one's notifications.
+      await SupabaseService.client.from('device_tokens').upsert({
+        'token': token,
+        'user_id': userId,
+        'platform': 'android',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'token');
+      _registeredToken = token;
+      _log('✅ device registered — this phone can now receive push');
+    } catch (e) {
+      // Not fatal: the in-app bell still works, this device just won't get push
+      // until a later launch retries.
+      _log('❌ could not save device token: $e');
+      _log('   (if this says the table is missing, run '
+          'supabase/notifications.sql)');
+    }
+  }
+}

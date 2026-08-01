@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:status_maker/features/statuses/data/saved_status.dart';
@@ -50,6 +52,9 @@ class LikesStore extends ChangeNotifier {
   Future<void> _load() async {
     try {
       final ids = await _repo.fetchLikedIds();
+      // null means the read itself failed — leave `_loaded` false so a later
+      // call retries instead of caching "nothing liked" for the session.
+      if (ids == null) return;
       _liked
         ..clear()
         ..addAll(ids);

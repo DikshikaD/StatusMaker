@@ -52,7 +52,7 @@ class _AppShimmerState extends State<AppShimmer>
 
     final base = AppColors.cardLight;
     final highlight = Color.alphaBlend(
-      Colors.white.withValues(alpha: ThemeController.isDark ? 0.10 : 0.55),
+      Colors.white.withValues(alpha: ThemeController.isDark ? 0.10 : 0.90),
       base,
     );
 

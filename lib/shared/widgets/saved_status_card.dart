@@ -6,6 +6,7 @@ import 'package:status_maker/core/utils/responsive.dart';
 import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/shared/widgets/app_shimmer.dart';
 import 'package:status_maker/shared/utils/share_image.dart';
+import 'package:status_maker/shared/widgets/share_target_dialog.dart';
 import 'package:status_maker/features/statuses/data/likes_store.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 
@@ -51,11 +52,21 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
     }
   }
 
+  /// Same destination popup as the editor: pick WhatsApp / Instagram / Facebook
+  /// / any other app first, then download the thumbnail and hand it over. The
+  /// popup opens before the download so it appears instantly.
   Future<void> _share() async {
     final url = widget.status.thumbUrl;
     if (url == null || url.isEmpty || _sharing) return;
+    final target = await showShareTargetDialog(context);
+    if (target == null || !mounted) return;
+
     setState(() => _sharing = true);
-    final ok = await shareImageUrl(url, text: widget.status.title);
+    final ok = await shareRemoteImage(
+      url: url,
+      target: target,
+      text: widget.status.title,
+    );
     if (!mounted) return;
     setState(() => _sharing = false);
     if (!ok) AppSnackBar.error(context, S.t('something_wrong'));

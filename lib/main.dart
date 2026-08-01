@@ -5,6 +5,7 @@ import 'core/theme/app_theme.dart';
 import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/notifications/push_service.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 import 'package:status_maker/features/splash/presentation/splash_screen.dart';
@@ -20,6 +21,11 @@ Future<void> main() async {
   await SupabaseService.init();
 
   runApp(const MyApp());
+
+  // Register this device for push AFTER the first frame: it can show the
+  // Android 13 permission dialog and talk to the network, neither of which
+  // should sit in front of the splash screen. Never throws — see PushService.
+  PushService.init();
 
   // Warm the template fonts AFTER the first frame is on screen, so font
   // fetching/decoding never blocks startup. google_fonts caches the result,
