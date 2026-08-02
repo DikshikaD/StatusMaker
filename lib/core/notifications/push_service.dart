@@ -4,6 +4,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/notifications/push_banner.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/features/preview/presentation/template_detail_screen.dart';
@@ -52,13 +54,26 @@ class PushService {
   /// way to push a screen from here.
   static final navigatorKey = GlobalKey<NavigatorState>();
 
-  /// Also attached to [MaterialApp] — lets [_showForegroundBanner] show a
-  /// SnackBar without a [BuildContext] of its own, same reason as [navigatorKey].
+  /// Also attached to [MaterialApp], so a SnackBar can be shown without a
+  /// [BuildContext] of its own — same reason as [navigatorKey].
+  ///
+  /// No longer used by [_showForegroundBanner], which now renders through the
+  /// navigator's overlay (see [PushBanner]). Kept as the app-wide messenger
+  /// hook; nothing currently reads it.
   static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   /// The token last written to the backend, so a refresh reporting the same value
   /// doesn't cause a pointless write on every launch.
   static String? _registeredToken;
+
+  /// The language stored alongside [_registeredToken]. Tracked so switching
+  /// language in Settings re-registers (the row would otherwise keep wording
+  /// tray notifications in the old language), while an unchanged language
+  /// still skips the redundant write.
+  static String? _registeredLang;
+
+  /// Guards against attaching the language listener twice if [init] re-runs.
+  static bool _langListenerAttached = false;
 
   /// This device's current FCM token, once known. Handy for pasting into
   /// Firebase Console → Messaging → Send test message.
@@ -137,6 +152,17 @@ class PushService {
         _showForegroundBanner(m);
       });
 
+      // Switching language in Settings must reach the backend too, or tray
+      // notifications keep arriving in the language chosen at install time.
+      if (!_langListenerAttached) {
+        _langListenerAttached = true;
+        S.lang.addListener(() {
+          if (_registeredToken == null) return;
+          _log('🌐 language changed to ${S.lang.value} — re-registering device');
+          _register(_registeredToken);
+        });
+      }
+
       // The user tapped a notification and it opened the app.
       FirebaseMessaging.onMessageOpenedApp.listen((m) {
         _log('👆 notification tapped (app was backgrounded): ${m.data}');
@@ -162,7 +188,7 @@ class PushService {
       _log('⚠️  register skipped: empty token');
       return;
     }
-    if (token == _registeredToken) {
+    if (token == _registeredToken && S.lang.value == _registeredLang) {
       _log('↩️  register skipped: token already saved this session');
       return;
     }
@@ -185,13 +211,18 @@ class PushService {
       // Upsert on the token (its primary key): re-registering the same phone
       // updates the row rather than erroring, and a phone that changes hands
       // moves to its new owner instead of keeping the old one's notifications.
+      final lang = S.lang.value;
       await SupabaseService.client.from('device_tokens').upsert({
         'token': token,
         'user_id': userId,
         'platform': 'android',
+        // Lets the Edge Function word the tray notification in the user's
+        // language while the app is closed.
+        'lang': lang,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'token');
       _registeredToken = token;
+      _registeredLang = lang;
       _log('✅ device registered — this phone can now receive push');
     } catch (e) {
       // Not fatal: the in-app bell still works, this device just won't get push
@@ -233,35 +264,60 @@ class PushService {
   }
 
   /// Stands in for the tray notification Android withholds while the app is
-  /// in the foreground (see the comment at the [onMessage] listener). Tapping
-  /// "View" reuses [_openFromData] — same destination as a real tap would go.
+  /// in the foreground (see the comment at the [onMessage] listener).
+  ///
+  /// Rendered as a themed heads-up tile dropping in from the top rather than a
+  /// bottom SnackBar: an incoming push reads as a notification, and the bottom
+  /// of the screen is already taken by the nav bar and the editor toolbars.
+  /// Tapping it reuses [_openFromData] — the same destination a real tray tap
+  /// would reach.
   static void _showForegroundBanner(RemoteMessage m) {
-    final messenger = scaffoldMessengerKey.currentState;
-    if (messenger == null) {
-      _log('⚠️  banner skipped: ScaffoldMessenger not attached yet');
+    // The root overlay, so the tile floats above the nav bar and any open
+    // bottom sheet or dialog.
+    final overlay = navigatorKey.currentState?.overlay;
+    if (overlay == null) {
+      _log('⚠️  banner skipped: navigator overlay not attached yet');
       return;
     }
-    final title = m.notification?.title;
-    final body = m.notification?.body;
-    if (title == null && body == null) return;
 
-    messenger.showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 5),
-        behavior: SnackBarBehavior.floating,
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (title != null)
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            if (body != null) Text(body),
-          ],
-        ),
-        action: _openableTypes.contains(m.data['type'])
-            ? SnackBarAction(label: 'View', onPressed: () => _openFromData(m.data))
-            : null,
-      ),
+    // toString() rather than a cast: FCM data values are strings in practice,
+    // but a cast would throw the whole banner away if one ever isn't.
+    final type = m.data['type']?.toString();
+    final openable = _openableTypes.contains(type);
+    final copy = _localizedCopy(m, type);
+
+    PushBanner.show(
+      overlay,
+      title: copy.$1,
+      body: copy.$2,
+      type: type,
+      onOpen: openable ? () => _openFromData(m.data) : null,
     );
+  }
+
+  /// The banner's wording in the user's chosen app language.
+  ///
+  /// The `notification` payload is worded server-side, and the Edge Function
+  /// can only pick a language from what was stored at device-registration time
+  /// — which is stale the moment the user switches language in Settings. While
+  /// the app is open we know the current choice, so re-word from [S] using the
+  /// `type` in the data payload and ignore the server's strings entirely.
+  ///
+  /// Unknown types fall back to whatever the server sent: an untranslated
+  /// notification still beats a blank one.
+  static (String?, String?) _localizedCopy(RemoteMessage m, String? type) {
+    if (type != 'like' && type != 'remix') {
+      return (m.notification?.title, m.notification?.body);
+    }
+
+    final statusTitle = m.data['status_title']?.toString();
+    final hasTitle = statusTitle != null && statusTitle.isNotEmpty;
+
+    final title = S.t('push_${type}_title');
+    final body = hasTitle
+        ? S.t('push_${type}_body_named').replaceAll('{title}', statusTitle)
+        : S.t('push_${type}_body');
+
+    return (title, body);
   }
 }

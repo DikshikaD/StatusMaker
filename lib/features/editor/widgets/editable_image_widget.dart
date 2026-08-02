@@ -10,7 +10,13 @@ class EditableImageWidget extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onSelect;
   final VoidCallback onDelete;
-  final void Function(Offset position, double scale, double rotation) onTransformEnd;
+  final Size canvasSize;
+  final void Function(
+    Offset position,
+    double scale,
+    double rotation,
+    double? boxWidth,
+  ) onTransformEnd;
 
   const EditableImageWidget({
     super.key,
@@ -19,6 +25,7 @@ class EditableImageWidget extends StatelessWidget {
     required this.onSelect,
     required this.onDelete,
     required this.onTransformEnd,
+    required this.canvasSize,
   });
 
   @override
@@ -77,6 +84,9 @@ class EditableImageWidget extends StatelessWidget {
       scale: image.scale,
       rotation: image.rotation,
       isSelected: isSelected,
+      canvasSize: canvasSize,
+      // Null boxWidth => corner handles scale the photo proportionally.
+      // Stretching one axis of a photo only distorts it.
       onSelect: onSelect,
       onDelete: onDelete,
       onTransformEnd: onTransformEnd,

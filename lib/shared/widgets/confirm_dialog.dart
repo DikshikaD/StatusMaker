@@ -30,7 +30,9 @@ Future<bool?> showConfirmDialog(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24.r),
         ),
-        child: Padding(
+        // Scrollable so the Cancel/Confirm buttons stay reachable on short
+        // screens and at large system font scales (matches ShareTargetDialog).
+        child: SingleChildScrollView(
           padding: EdgeInsets.all(24.w),
           child: Column(
             mainAxisSize: MainAxisSize.min,

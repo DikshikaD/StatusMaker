@@ -1,6 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/features/editor/data/template_motif.dart';
 
+/// Layout width a text object uses until the user resizes it by hand. Also the
+/// value every pre-`boxWidth` saved design deserializes to, so old designs are
+/// unaffected by the field being added.
+const double kDefaultTextBoxWidth = 300;
+
+/// How far a text box may be narrowed/widened by dragging a corner handle, in
+/// the object's own unscaled space. The floor keeps the box wide enough to
+/// stay grabbable; the ceiling stops a drag from running away off-canvas.
+const double kMinTextBoxWidth = 48;
+const double kMaxTextBoxWidth = 1200;
+
+/// Bounds for every object's uniform [scale]. Shared by the pinch gesture and
+/// the corner resize handles so both agree on what "as small/large as it goes"
+/// means — otherwise one path can leave an object at a size the other refuses
+/// to reproduce.
+const double kMinObjectScale = 0.3;
+const double kMaxObjectScale = 6.0;
+
+/// Padding between an object's content and its selection border. The inline
+/// text editor must use the same value as [TransformableObject]: both pivot
+/// their rotate/scale transforms on the child's centre, so a mismatch shifts
+/// the pivot and makes the text visibly jump when editing starts and ends.
+const double kObjectContentPadding = 6;
+
 /// The five shapes a floating image can take. Nothing else.
 enum ImageShape { square, roundedRectangle, circle, oval, heart }
 
@@ -26,6 +50,16 @@ class ImageObject {
   Offset photoOffset;
   double photoScale;
 
+  /// Stacking order across ALL canvas objects (texts, images AND elements
+  /// together) — higher paints on top. Without a shared order like this, the
+  /// canvas painted (and hit-tested) texts above images above elements no
+  /// matter what was actually added or moved on top of what, so once a few
+  /// overlapping objects existed, some became impossible to grab at all: taps
+  /// landed on whatever object the fixed type-grouping put on top instead.
+  /// See EditorController.select(), which bumps this whenever an object is
+  /// selected/dragged, bringing it to the front.
+  int zIndex;
+
   ImageObject({
     required this.id,
     required this.path,
@@ -38,6 +72,7 @@ class ImageObject {
     this.frameColor = Colors.white,
     this.photoOffset = Offset.zero,
     this.photoScale = 1.0,
+    this.zIndex = 0,
   });
 
   ImageObject copyWith({
@@ -51,6 +86,7 @@ class ImageObject {
     Color? frameColor,
     Offset? photoOffset,
     double? photoScale,
+    int? zIndex,
   }) {
     return ImageObject(
       id: id,
@@ -64,6 +100,7 @@ class ImageObject {
       frameColor: frameColor ?? this.frameColor,
       photoOffset: photoOffset ?? this.photoOffset,
       photoScale: photoScale ?? this.photoScale,
+      zIndex: zIndex ?? this.zIndex,
     );
   }
 }
@@ -86,6 +123,22 @@ class TextObject {
   double scale;
   double rotation; // radians
 
+  /// Width of the text box in the object's own (unscaled) coordinate space,
+  /// i.e. before [scale] is applied. Null means "never resized by hand" and
+  /// falls back to [kDefaultTextBoxWidth] — which is also what every design
+  /// saved before this field existed deserializes to, so old designs keep
+  /// laying out exactly as they did.
+  ///
+  /// This is the one dimension a text object resizes freely: dragging a corner
+  /// handle re-wraps the text to a new width instead of scaling the glyphs
+  /// (font size stays under the user's control via the text toolbar). Images
+  /// and stickers have no equivalent — they resize proportionally only, since
+  /// stretching a photo or a vector sticker on one axis just distorts it.
+  double? boxWidth;
+
+  /// Stacking order across ALL canvas objects — see [ImageObject.zIndex].
+  int zIndex;
+
   TextObject({
     required this.id,
     this.text = '',
@@ -101,7 +154,12 @@ class TextObject {
     this.position = const Offset(60, 220),
     this.scale = 1.0,
     this.rotation = 0.0,
+    this.boxWidth,
+    this.zIndex = 0,
   });
+
+  /// The width actually used for layout, resolving the "never resized" null.
+  double get effectiveBoxWidth => boxWidth ?? kDefaultTextBoxWidth;
 
   TextObject copyWith({
     String? text,
@@ -117,6 +175,8 @@ class TextObject {
     Offset? position,
     double? scale,
     double? rotation,
+    double? boxWidth,
+    int? zIndex,
   }) {
     return TextObject(
       id: id,
@@ -133,6 +193,8 @@ class TextObject {
       position: position ?? this.position,
       scale: scale ?? this.scale,
       rotation: rotation ?? this.rotation,
+      boxWidth: boxWidth ?? this.boxWidth,
+      zIndex: zIndex ?? this.zIndex,
     );
   }
 }
@@ -196,6 +258,9 @@ class ElementObject {
   /// shape/character sticker above.
   String? assetPath;
 
+  /// Stacking order across ALL canvas objects — see [ImageObject.zIndex].
+  int zIndex;
+
   ElementObject({
     required this.id,
     required this.shape,
@@ -205,6 +270,7 @@ class ElementObject {
     this.rotation = 0.0,
     this.strokeWidth = 1.0,
     this.assetPath,
+    this.zIndex = 0,
   });
 
   ElementObject copyWith({
@@ -215,6 +281,7 @@ class ElementObject {
     double? rotation,
     double? strokeWidth,
     String? assetPath,
+    int? zIndex,
   }) {
     return ElementObject(
       id: id,
@@ -225,6 +292,7 @@ class ElementObject {
       rotation: rotation ?? this.rotation,
       strokeWidth: strokeWidth ?? this.strokeWidth,
       assetPath: assetPath ?? this.assetPath,
+      zIndex: zIndex ?? this.zIndex,
     );
   }
 }
@@ -291,6 +359,13 @@ class EditorController extends ChangeNotifier {
   int _seq = 0;
   String _generateId() => '${DateTime.now().microsecondsSinceEpoch}_${_seq++}';
 
+  /// Next stacking-order value to hand out — always higher than every zIndex
+  /// currently on the canvas, so a freshly added or brought-to-front object is
+  /// always painted on top of everything else. Reseeded in [_applySnapshot]
+  /// (initial load, undo/redo) so it never collides with values already
+  /// baked into a loaded design.
+  int _nextZ = 0;
+
   BackgroundState _background = const BackgroundState(color: Color(0xFF0F172A));
   BackgroundState get background => _background;
 
@@ -331,6 +406,25 @@ class EditorController extends ChangeNotifier {
   /// selection frames + the contextual toolbar — never the whole canvas.
   final ValueNotifier<String?> selectedId = ValueNotifier<String?>(null);
 
+  /// Whether the design has edits that aren't in the saved copy yet — drives
+  /// the "Discard changes?" prompt on back navigation.
+  ///
+  /// Driven off [_checkpoint], which is already called by every single mutating
+  /// path in this class (add/delete/move/resize/rotate/text/colour/font/
+  /// opacity/background/frame). Piggybacking on it rather than setting a flag
+  /// in each setter means a mutator added later can't silently forget to mark
+  /// the design dirty — it would have to skip undo support too, which is far
+  /// more visible. Selection and bring-to-front deliberately don't checkpoint,
+  /// so merely tapping an object never counts as an unsaved change.
+  ///
+  /// A [ValueNotifier] rather than plain state so the back handler can read it
+  /// without subscribing to whole-canvas rebuilds.
+  final ValueNotifier<bool> isDirty = ValueNotifier<bool>(false);
+
+  /// Marks the current state as the saved baseline — call after a successful
+  /// save, so backing out immediately afterwards doesn't re-prompt.
+  void markSaved() => isDirty.value = false;
+
   TextObject? get selectedText {
     final id = selectedId.value;
     if (id == null) return null;
@@ -358,8 +452,82 @@ class EditorController extends ChangeNotifier {
     return null;
   }
 
-  void select(String? id) => selectedId.value = id;
+  /// Selecting an object also brings it to front (see [ImageObject.zIndex]):
+  /// otherwise an object mostly covered by others — easy to end up with once
+  /// a few overlap — could be selected via its one exposed sliver but never
+  /// actually dragged, since whatever was on top of it would keep intercepting
+  /// the drag. Deliberately NOT undoable/checkpointed: it's a side effect of
+  /// looking at an object, not an edit.
+  void select(String? id) {
+    selectedId.value = id;
+    if (id != null) _bringToFront(id);
+  }
+
   void clearSelection() => selectedId.value = null;
+
+  /// Raises [id] above everything else, if it isn't already.
+  ///
+  /// Marks the design dirty even though it doesn't checkpoint. zIndex is
+  /// persisted and decides paint (and therefore hit-test) order, so deliberately
+  /// tapping overlapping objects into the layering you want IS an edit worth
+  /// keeping — without this, arranging three overlapping stickers and backing
+  /// out would exit with no prompt and silently lose the arrangement. It still
+  /// doesn't checkpoint: undo steps should be the user's explicit edits, not
+  /// every incidental tap.
+  ///
+  /// Reads the frontmost check BEFORE consuming a z value, so re-tapping the
+  /// object that's already on top is a genuine no-op rather than burning a
+  /// counter slot (and inflating stored z values) on every tap.
+  void _bringToFront(String id) {
+    void raise<T>(List<T> list, int i, T Function(T, int z) withZ,
+        void Function() invalidate) {
+      final z = _nextZ++;
+      list[i] = withZ(list[i], z);
+      invalidate();
+      isDirty.value = true;
+      notifyListeners();
+    }
+
+    final ti = _texts.indexWhere((e) => e.id == id);
+    if (ti != -1) {
+      if (_isFrontmost(id, _texts[ti].zIndex)) return;
+      raise(_texts, ti, (t, z) => t.copyWith(zIndex: z), () => _textsView = null);
+      return;
+    }
+    final ii = _images.indexWhere((e) => e.id == id);
+    if (ii != -1) {
+      if (_isFrontmost(id, _images[ii].zIndex)) return;
+      raise(_images, ii, (t, z) => t.copyWith(zIndex: z), () => _imagesView = null);
+      return;
+    }
+    final ei = _elements.indexWhere((e) => e.id == id);
+    if (ei != -1) {
+      if (_isFrontmost(id, _elements[ei].zIndex)) return;
+      raise(
+          _elements, ei, (t, z) => t.copyWith(zIndex: z), () => _elementsView = null);
+    }
+  }
+
+  /// Whether the object [id] (currently at [z]) already paints above every
+  /// other object, so raising it would change nothing.
+  ///
+  /// Ties count as NOT frontmost. Every object in a design saved before zIndex
+  /// existed has z == 0, and _orderedLayers breaks those ties by type grouping
+  /// rather than by selection — so treating a tie as "already on top" would
+  /// make selecting a buried object in such a design fail to raise it, which is
+  /// the exact un-grabbable-overlap problem bring-to-front exists to solve.
+  bool _isFrontmost(String id, int z) {
+    for (final t in _texts) {
+      if (t.id != id && t.zIndex >= z) return false;
+    }
+    for (final i in _images) {
+      if (i.id != id && i.zIndex >= z) return false;
+    }
+    for (final e in _elements) {
+      if (e.id != id && e.zIndex >= z) return false;
+    }
+    return true;
+  }
 
   /// Asks the canvas to open the inline editor for [id] on the next frame.
   void requestEdit(String id) => editRequest.value = id;
@@ -369,6 +537,7 @@ class EditorController extends ChangeNotifier {
   void dispose() {
     selectedId.dispose();
     editRequest.dispose();
+    isDirty.dispose();
     super.dispose();
   }
 
@@ -421,12 +590,29 @@ class EditorController extends ChangeNotifier {
     _textsView = null;
     _imagesView = null;
     _elementsView = null;
+    // Reseed above every zIndex this snapshot brought in, so the next add/
+    // select can't hand out a value that's already in use and paint behind
+    // something it should be on top of.
+    var maxZ = -1;
+    for (final t in _texts) {
+      if (t.zIndex > maxZ) maxZ = t.zIndex;
+    }
+    for (final i in _images) {
+      if (i.zIndex > maxZ) maxZ = i.zIndex;
+    }
+    for (final e in _elements) {
+      if (e.zIndex > maxZ) maxZ = e.zIndex;
+    }
+    _nextZ = maxZ + 1;
     notifyListeners();
   }
 
   /// Call immediately before any state mutation, so there's always a snapshot
   /// of "how it looked right before this change" to undo back to.
   void _checkpoint() {
+    // Set before the coalescing early-return below, so the 2nd..nth mutation of
+    // a rapid burst (e.g. a slider drag, which returns early) still counts.
+    isDirty.value = true;
     final now = DateTime.now();
     if (_lastCheckpointAt != null &&
         now.difference(_lastCheckpointAt!) < _coalesceWindow) {
@@ -439,6 +625,11 @@ class EditorController extends ChangeNotifier {
     _redoStack.clear();
   }
 
+  // Undo/redo move the design away from whatever was last saved just as much as
+  // a forward edit does, so both mark it dirty. They go through _applySnapshot
+  // rather than _checkpoint (which is what normally sets the flag), and
+  // _applySnapshot is also how the *initial* load lands — which must NOT count
+  // as an edit — so the flag is set here instead of in there.
   void undo() {
     if (_undoStack.isEmpty) return;
     final current = _snapshot();
@@ -446,6 +637,7 @@ class EditorController extends ChangeNotifier {
     _redoStack.add(current);
     _lastCheckpointAt = null; // the next edit always gets its own step
     _applySnapshot(prev);
+    isDirty.value = true;
   }
 
   void redo() {
@@ -455,15 +647,21 @@ class EditorController extends ChangeNotifier {
     _undoStack.add(current);
     _lastCheckpointAt = null;
     _applySnapshot(next);
+    isDirty.value = true;
   }
 
   /// Called once the editor has finished its initial setup (a fresh canvas, a
   /// preloaded template, or a reopened design) so "Undo" only ever reverts the
   /// user's own edits — never back into a half-built initial state.
+  ///
+  /// Also resets [isDirty]: that setup runs through the same mutators the user
+  /// does, so without this a design would be "unsaved" the instant the editor
+  /// opened and backing straight out would wrongly prompt to discard.
   void clearHistory() {
     _undoStack.clear();
     _redoStack.clear();
     _lastCheckpointAt = null;
+    isDirty.value = false;
   }
 
   /// Replaces the entire canvas with a previously saved design. Used when the
@@ -504,6 +702,7 @@ class EditorController extends ChangeNotifier {
       id: _generateId(),
       path: path,
       position: Offset(50 + (n % 4) * 22.0, 150 + (n % 4) * 44.0),
+      zIndex: _nextZ++,
     );
     _images.add(obj);
     _imagesView = null;
@@ -526,6 +725,7 @@ class EditorController extends ChangeNotifier {
       position: position,
       scale: scale,
       isPlaceholder: true,
+      zIndex: _nextZ++,
     );
     _images.add(obj);
     _imagesView = null;
@@ -607,6 +807,7 @@ class EditorController extends ChangeNotifier {
       text: text,
       // Stagger each new text so they never stack on the exact same spot.
       position: Offset(40 + (n % 3) * 18.0, 170 + (n % 6) * 62.0),
+      zIndex: _nextZ++,
     );
     _texts.add(obj);
     _textsView = null;
@@ -636,12 +837,16 @@ class EditorController extends ChangeNotifier {
   }
 
   void updateTextTransform(String id,
-      {Offset? position, double? scale, double? rotation}) {
+      {Offset? position, double? scale, double? rotation, double? boxWidth}) {
     final i = _texts.indexWhere((e) => e.id == id);
     if (i != -1) {
       _checkpoint();
-      _texts[i] = _texts[i]
-          .copyWith(position: position, scale: scale, rotation: rotation);
+      _texts[i] = _texts[i].copyWith(
+        position: position,
+        scale: scale,
+        rotation: rotation,
+        boxWidth: boxWidth,
+      );
       _textsView = null;
       notifyListeners();
     }
@@ -670,6 +875,7 @@ class EditorController extends ChangeNotifier {
       assetPath: assetPath,
       // Stagger so each new element doesn't land on the exact same spot.
       position: Offset(110 + (n % 4) * 20.0, 200 + (n % 5) * 46.0),
+      zIndex: _nextZ++,
     );
     _elements.add(obj);
     _elementsView = null;

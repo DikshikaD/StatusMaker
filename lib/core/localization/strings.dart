@@ -58,6 +58,38 @@ class S {
     'nav_favorites': ['Favorites', 'पसंदीदा'],
     'nav_settings': ['Settings', 'सेटिंग्स'],
 
+    // push notifications
+    //
+    // The `_named` variants take the status title via {title}; see
+    // PushService._localizedCopy, which falls back to the plain variant when
+    // the payload carries no title. Kept in sync with the English copy in
+    // supabase/functions/notify-on-like/index.ts, which words the tray
+    // notification shown while the app is closed.
+    'push_like_title': [
+      'Someone liked your status ❤️',
+      'किसी ने आपका स्टेटस पसंद किया ❤️'
+    ],
+    'push_like_body': [
+      'Your status got a new like.',
+      'आपके स्टेटस को नया लाइक मिला।'
+    ],
+    'push_like_body_named': [
+      'Your status "{title}" got a new like.',
+      'आपके स्टेटस "{title}" को नया लाइक मिला।'
+    ],
+    'push_remix_title': [
+      'Someone remixed your template 🔁',
+      'किसी ने आपका टेम्पलेट रीमिक्स किया 🔁'
+    ],
+    'push_remix_body': [
+      'Someone used your template.',
+      'किसी ने आपका टेम्पलेट इस्तेमाल किया।'
+    ],
+    'push_remix_body_named': [
+      'Someone used your template "{title}".',
+      'किसी ने आपका टेम्पलेट "{title}" इस्तेमाल किया।'
+    ],
+
     // categories
     'cat_Good Morning': ['Good Morning', 'सुप्रभात'],
     'cat_Morning': ['Morning', 'सुबह'],
@@ -252,6 +284,12 @@ class S {
     ],
     'deleted_ok': ['Deleted', 'डिलीट हो गया'],
     'cancel': ['Cancel', 'रद्द करें'],
+    'discard': ['Discard', 'छोड़ दें'],
+    'discard_changes_title': ['Discard Changes?', 'बदलाव छोड़ दें?'],
+    'discard_changes_msg': [
+      'You have unsaved changes. What would you like to do?',
+      'आपके कुछ बदलाव सेव नहीं हुए हैं। आप क्या करना चाहेंगे?'
+    ],
     'delete_status_title': ['Delete this?', 'इसे डिलीट करें?'],
     'delete_status_msg': [
       'This will permanently delete this creation. This can\'t be undone.',

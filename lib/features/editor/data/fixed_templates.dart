@@ -4,12 +4,13 @@ import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/status_design.dart';
 import 'package:status_maker/features/editor/data/template_motif.dart';
 import 'package:status_maker/features/editor/utils/image_shape_utils.dart';
+import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 
 /// The logical canvas every fixed template is designed against. The locked
 /// canvas always lays out at exactly this size (scaled to fit the screen with
 /// a FittedBox), so positions here are deterministic on every device — unlike
 /// the free editor, where coordinates depend on the live canvas size.
-const Size kFixedCanvasSize = Size(360, 640);
+const Size kFixedCanvasSize = kDesignDefaultCanvasSize;
 
 /// The theme rows the Create tab groups the ready-made designs into. The order
 /// here is the order they appear on screen; each key's heading comes from
@@ -111,11 +112,25 @@ class FixedTemplate {
   /// Computed once per template: the preview cards ask for this on every build,
   /// and rebuilding a map of split strings each time a card scrolls into view is
   /// pure waste — the authored line counts never change.
+  ///
+  /// Cached per language: the Hindi overrides in [_hiText] are authored with
+  /// the same line counts, but deriving the limit from the text actually shown
+  /// means a future translation that adds a line can't be silently clipped.
   Map<String, int>? _lineLimits;
-  Map<String, int> get lineLimits => _lineLimits ??= {
-        for (final t in texts)
-          t.id: t.text.isEmpty ? 1 : t.text.split('\n').length,
-      };
+  String? _lineLimitsLang;
+  Map<String, int> get lineLimits {
+    if (_lineLimits != null && _lineLimitsLang == S.lang.value) {
+      return _lineLimits!;
+    }
+    _lineLimitsLang = S.lang.value;
+    return _lineLimits = {
+      for (final t in texts)
+        t.id: () {
+          final shown = (S.isHi ? _hiText[t.id] : null) ?? t.text;
+          return shown.isEmpty ? 1 : shown.split('\n').length;
+        }(),
+    };
+  }
 
   // Preview designs are read-only, so unlike [design] they can be shared rather
   // than deep-copied on every build. Cached per language because the name
@@ -145,6 +160,13 @@ class FixedTemplate {
           if (t.id == nameSlotId && copy.text.isEmpty) {
             copy.text = S.t('name_placeholder');
           }
+          // Slots authored in English get their Hindi wording here rather than
+          // in the static list, so switching language re-resolves them.
+          final hi = S.isHi ? _hiText[t.id] : null;
+          if (hi != null) copy.text = hi;
+          // The authored font may be Latin-only; Devanagari would silently
+          // fall back to a system face and lose the design's character.
+          copy.fontFamily = fontForText(copy.fontFamily, copy.text);
           return copy;
         }).toList(),
         images: [
@@ -160,6 +182,54 @@ class FixedTemplate {
 
 /// Every template belonging to [theme], in authoring order. Grouped once and
 /// reused — the Search tab asks for each theme's list on every build.
+/// Hindi wording for the slots that were authored in English, keyed by slot id.
+///
+/// Kept as an override map rather than a second copy of every template: the
+/// layout, palette and geometry are identical between languages, only the
+/// string differs. [FixedTemplate.design] applies these when the app language
+/// is Hindi, and swaps in a Devanagari-capable font via [fontForText] — the
+/// authored fonts here are Latin-only display faces.
+///
+/// **Line counts must match the English exactly.** [FixedTemplate.lineLimits]
+/// clamps each slot to the number of lines it was authored with, so an extra
+/// `\n` here would be silently clipped on the canvas.
+const Map<String, String> _hiText = {
+  // Good Morning
+  'fx_mgold_title': 'शुभ प्रभात',
+  'fx_mgold_body': 'हर सूर्योदय एक नई\nशुरुआत का निमंत्रण है।',
+  'fx_mbot_title': 'उठो और चमको',
+  'fx_mbot_body': 'शांत मन ही दिन की\nसबसे अच्छी शुरुआत है।',
+  'fx_mmin_title': 'सुप्रभात',
+  'fx_mmin_body': '“आज एक नई शुरुआत है।”',
+  'fx_mbold_title': 'सुप्रभात',
+  'fx_mbold_body': 'आज का दिन शानदार बनाइए।',
+
+  // Wishes
+  'fx_bday_title': 'जन्मदिन मुबारक',
+  'fx_anniv_title': 'सालगिरह मुबारक',
+  'fx_ny_title': 'नववर्ष की शुभकामनाएँ',
+  'fx_cong_title': 'बहुत बधाई हो!',
+  'fx_cong_body': 'आपको आगे भी ऐसी ही\nसफलता मिलती रहे।',
+  'fx_thx_title': 'धन्यवाद',
+  'fx_thx_body': 'आपके प्यार और सहयोग\nके लिए सदा आभारी।',
+
+  // Good Night
+  'fx_gnen_title': 'शुभ रात्रि',
+  'fx_gnen_body': 'आपके सपने उतने ही\nमीठे हों जितने आप हैं।',
+
+  // Love / memories / quotes
+  'fx_love_main': 'हर प्रेम कहानी सुंदर होती है,\nपर हमारी मेरी सबसे प्यारी है।',
+  'fx_memory_main': 'कुछ पल हमेशा के लिए\nदिल में बस जाते हैं।',
+  'fx_royal_main': 'शालीनता ही वह सुंदरता है\nजो कभी फीकी नहीं पड़ती।',
+  'fx_motiv_main': 'बड़ा सोचो।\nछोटा शुरू करो।\nअभी करो।',
+  'fx_min_main': '“सरलता ही सबसे बड़ी\nपरिष्कृतता है।”',
+
+  // Newer designs
+  'fx_nstar_title': 'तारों भरी शुभकामनाएँ',
+  'fx_nstar_body': 'आँखें मूँदिए और रात को\nआपको सँभालने दीजिए।',
+  'fx_lfor_main': 'तुम हमेशा मेरी सबसे\nप्यारी खबर हो।',
+};
+
 final Map<String, List<FixedTemplate>> _byTheme = () {
   final map = <String, List<FixedTemplate>>{};
   for (final t in kFixedTemplates) {
@@ -203,6 +273,7 @@ StatusDesign scaleDesignToCanvas(StatusDesign d, Size from, Size to) {
     frame: d.frame,
     frameColor: d.frameColor,
     frameWidth: d.frameWidth,
+    canvasSize: to,
   );
 }
 
@@ -1275,6 +1346,114 @@ final List<FixedTemplate> kFixedTemplates = [
     ],
   ),
 
+  // The two below reuse the slot geometry of the two above verbatim — only the
+  // palette, wording and fonts differ. Those offsets are already proven against
+  // the locked canvas, so new designs can't collide or clip.
+
+  FixedTemplate(
+    id: 'fx_night_calm',
+    name: 'Sukoon Bhari Raat',
+    theme: 'night',
+    background: const BackgroundState(
+      gradientColors: [Color(0xFF0A1128), Color(0xFF243B6B)],
+      motif: TemplateMotif.moonStars,
+      motifColor: Color(0xFFB3E5FC),
+    ),
+    nameSlotId: 'fx_ncalm_name',
+    photo: _photoSlot(
+      id: 'fx_ncalm_photo',
+      shape: ImageShape.circle,
+      top: 355, // 355–465
+      width: 110,
+      frameColor: const Color(0xFFB3E5FC),
+    ),
+    texts: [
+      _slot(
+        id: 'fx_ncalm_title',
+        text: 'सुकून भरी रात',
+        font: 'Baloo 2',
+        size: 40,
+        color: const Color(0xFFB3E5FC),
+        top: 110, // 110–190
+      ),
+      _slot(
+        id: 'fx_ncalm_body',
+        text: 'तारों को सौंप दीजिए\nदिन की हर चिंता।',
+        font: 'Mukta',
+        size: 22,
+        color: const Color(0xE6FFFFFF),
+        top: 235, // 235–333
+        bold: false,
+        lineHeight: 1.6,
+      ),
+      _slot(
+        id: 'fx_ncalm_caption',
+        text: 'मीठी नींद',
+        font: 'Kalam',
+        size: 22,
+        color: const Color(0xB3B3E5FC),
+        top: 490, // 490–547
+        bold: false,
+      ),
+      _nameSlot(
+        id: 'fx_ncalm_name',
+        font: 'Hind',
+        size: 14,
+        color: const Color(0x99B3E5FC),
+        top: 570, // 570–611
+      ),
+    ],
+  ),
+
+  FixedTemplate(
+    id: 'fx_night_starlit',
+    name: 'Starlit',
+    theme: 'night',
+    background: const BackgroundState(
+      gradientColors: [Color(0xFF101828), Color(0xFF2E4A7D)],
+      motif: TemplateMotif.moonStars,
+      motifColor: Color(0xFFFFF3B0),
+    ),
+    frame: StatusFrame.corners,
+    frameColor: const Color(0xFFFFF3B0),
+    nameSlotId: 'fx_nstar_name',
+    photo: _photoSlot(
+      id: 'fx_nstar_photo',
+      shape: ImageShape.circle,
+      top: 370, // 370–500
+      width: 130,
+      frameColor: const Color(0xFFFFF3B0),
+    ),
+    texts: [
+      _slot(
+        id: 'fx_nstar_title',
+        text: 'Starlit Wishes',
+        font: 'Playfair Display',
+        size: 38,
+        color: const Color(0xFFFFF3B0),
+        top: 130, // 130–207
+      ),
+      _slot(
+        id: 'fx_nstar_body',
+        text: 'Close your eyes and let\nthe night hold you.',
+        font: 'Montserrat',
+        size: 19,
+        color: const Color(0xE6FFFFFF),
+        top: 250, // 250–337
+        bold: false,
+        lineHeight: 1.55,
+      ),
+      _nameSlot(
+        id: 'fx_nstar_name',
+        font: 'Montserrat',
+        size: 12,
+        color: const Color(0xCCFFF3B0),
+        top: 540, // 540–584
+        letterSpacing: 3,
+      ),
+    ],
+  ),
+
   // =========================================================================
   // DEVOTIONAL
   // =========================================================================
@@ -1319,6 +1498,55 @@ final List<FixedTemplate> kFixedTemplates = [
       ),
       _nameSlot(
         id: 'fx_bhakti_name',
+        font: 'Hind',
+        size: 15,
+        color: const Color(0x99FFE082),
+        top: 530, // 530–573
+      ),
+    ],
+  ),
+
+  // Reuses fx_bhakti's proven slot geometry; Krishna-blue instead of saffron.
+  FixedTemplate(
+    id: 'fx_gyan',
+    name: 'Gyan Prakash',
+    theme: 'devotional',
+    background: const BackgroundState(
+      gradientColors: [Color(0xFF1A237E), Color(0xFF4A148C)],
+      motif: TemplateMotif.lotus,
+      motifColor: Color(0xFFFFE082),
+    ),
+    frame: StatusFrame.rounded,
+    frameColor: const Color(0xFFFFE082),
+    nameSlotId: 'fx_gyan_name',
+    photo: _photoSlot(
+      id: 'fx_gyan_photo',
+      shape: ImageShape.circle,
+      top: 75, // 75–205
+      width: 130,
+      frameColor: const Color(0xFFFFE082),
+    ),
+    texts: [
+      _slot(
+        id: 'fx_gyan_main',
+        text: 'ज्ञान का प्रकाश सदा\nआपके साथ रहे',
+        font: 'Tiro Devanagari Hindi',
+        size: 30,
+        color: const Color(0xFFFFE9B0),
+        top: 240, // 240–358
+        lineHeight: 1.5,
+      ),
+      _slot(
+        id: 'fx_gyan_caption',
+        text: 'शुभ दिन',
+        font: 'Yatra One',
+        size: 22,
+        color: const Color(0xCCFFE082),
+        top: 430, // 430–487
+        bold: false,
+      ),
+      _nameSlot(
+        id: 'fx_gyan_name',
         font: 'Hind',
         size: 15,
         color: const Color(0x99FFE082),
@@ -1414,6 +1642,48 @@ final List<FixedTemplate> kFixedTemplates = [
         font: 'Montserrat',
         size: 13,
         color: const Color(0x99AD1457),
+        top: 470, // 470–515
+        letterSpacing: 4,
+      ),
+    ],
+  ),
+
+  // Reuses fx_love_note's proven slot geometry, in a violet palette.
+  FixedTemplate(
+    id: 'fx_love_forever',
+    name: 'Always You',
+    theme: 'love',
+    background: const BackgroundState(
+      gradientColors: [Color(0xFFF3E5F5), Color(0xFFCE93D8)],
+      motif: TemplateMotif.hearts,
+      motifColor: Color(0xFF6A1B9A),
+    ),
+    frame: StatusFrame.rounded,
+    frameColor: const Color(0x666A1B9A),
+    showPlaceholder: true,
+    nameSlotId: 'fx_lfor_name',
+    photo: _photoSlot(
+      id: 'fx_lfor_photo',
+      shape: ImageShape.heart,
+      top: 85, // 85–278
+      width: 210,
+    ),
+    texts: [
+      _slot(
+        id: 'fx_lfor_main',
+        text: 'You are my favourite\nnotification, always.',
+        font: 'Dancing Script',
+        size: 30,
+        color: const Color(0xFF6A1B9A),
+        top: 320, // 320–429
+        bold: false,
+        lineHeight: 1.35,
+      ),
+      _nameSlot(
+        id: 'fx_lfor_name',
+        font: 'Montserrat',
+        size: 13,
+        color: const Color(0x996A1B9A),
         top: 470, // 470–515
         letterSpacing: 4,
       ),

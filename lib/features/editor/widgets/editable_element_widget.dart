@@ -9,8 +9,13 @@ class EditableElementWidget extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onSelect;
   final VoidCallback onDelete;
-  final void Function(Offset position, double scale, double rotation)
-      onTransformEnd;
+  final Size canvasSize;
+  final void Function(
+    Offset position,
+    double scale,
+    double rotation,
+    double? boxWidth,
+  ) onTransformEnd;
 
   const EditableElementWidget({
     super.key,
@@ -19,6 +24,7 @@ class EditableElementWidget extends StatelessWidget {
     required this.onSelect,
     required this.onDelete,
     required this.onTransformEnd,
+    required this.canvasSize,
   });
 
   // Lines/arrows read better as a wider box; the rest stay square.
@@ -41,6 +47,8 @@ class EditableElementWidget extends StatelessWidget {
       scale: element.scale,
       rotation: element.rotation,
       isSelected: isSelected,
+      canvasSize: canvasSize,
+      // Null boxWidth => corner handles scale the sticker proportionally.
       onSelect: onSelect,
       onDelete: onDelete,
       onTransformEnd: onTransformEnd,

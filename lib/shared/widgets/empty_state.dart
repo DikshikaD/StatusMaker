@@ -22,7 +22,9 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
+      // Scrolls only when the content can't fit (landscape, or large system
+      // text scales); stays vertically centred otherwise.
+      child: SingleChildScrollView(
         padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 24.h),
         child: Column(
           mainAxisSize: MainAxisSize.min,

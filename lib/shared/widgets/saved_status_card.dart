@@ -17,7 +17,15 @@ class SavedStatusCard extends StatefulWidget {
   final SavedStatus status;
 
   /// Opens the editor pre-loaded with this status's editable design.
+  /// Wired to the explicit Customize button — editing is a deliberate act, not
+  /// something a tap on the artwork should trigger.
   final VoidCallback onCustomize;
+
+  /// Opens the read-only detail view for this status — what tapping the
+  /// preview does, and the same destination a notification tap lands on.
+  /// Falls back to [onCustomize] when not supplied, so older call sites keep
+  /// their previous behaviour.
+  final VoidCallback? onOpen;
 
   /// When provided, a delete button is shown (used in "My Creations").
   final VoidCallback? onDelete;
@@ -29,6 +37,7 @@ class SavedStatusCard extends StatefulWidget {
     super.key,
     required this.status,
     required this.onCustomize,
+    this.onOpen,
     this.onDelete,
     this.tag,
   });
@@ -108,7 +117,7 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) => setState(() => _pressed = false),
       onTapCancel: () => setState(() => _pressed = false),
-      onTap: widget.onCustomize,
+      onTap: widget.onOpen ?? widget.onCustomize,
       child: ClipRRect(
         borderRadius: BorderRadius.vertical(
             top: Radius.circular(AppDimensions.radiusLarge)),
@@ -127,6 +136,13 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
                     s.thumbUrl!,
                     fit: BoxFit.cover,
                     gaplessPlayback: true,
+                    // Decode at most at the card's on-screen width. Without
+                    // this a feed of full-resolution thumbnails decodes each
+                    // at source size, which janks and OOM-kills low-end
+                    // Android while the card only ever paints screen-wide.
+                    cacheWidth: (ScreenUtil.screenWidth *
+                            MediaQuery.devicePixelRatioOf(context))
+                        .round(),
                     // Fade the photo in once decoded (no pop-in).
                     frameBuilder: (context, child, frame, wasSync) {
                       if (wasSync) return child;
@@ -188,46 +204,71 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
       padding: EdgeInsets.fromLTRB(8.w, 10.h, 12.w, 12.h),
       child: Row(
         children: [
-          // Like — rebuilds from the shared store, so the heart and count are
-          // correct on every rebuild and stay in step with the other tabs.
-          ListenableBuilder(
-            listenable: LikesStore.instance,
-            builder: (context, _) {
-              final liked = LikesStore.instance.isLiked(s.id);
-              return _iconAction(
-                icon: liked ? Icons.favorite : Icons.favorite_border,
-                color: liked ? AppColors.accent : AppColors.textSecondary,
-                label: '${LikesStore.instance.countFor(s)}',
-                onTap: _toggleLike,
-              );
-            },
-          ),
-          // Remix count comes straight from the row (`statuses.remix_count`,
-          // kept in sync by a DB trigger whenever someone saves a
-          // personalization of this template) — there's nothing to toggle
-          // here, so tapping it just does the same thing as Customize.
-          if (s.remixCount > 0)
-            _iconAction(
-              icon: Icons.repeat,
-              color: AppColors.textSecondary,
-              label: '${s.remixCount}',
-              onTap: widget.onCustomize,
+          // The icon actions vary in both count (remix and delete are
+          // conditional) and width (counts grow to 3-4 digits, "Share"
+          // translates, and the system font scale multiplies all of it), so
+          // their natural width can exceed the row — it overflowed by 8.5px
+          // with remix and delete both showing. Expanded caps the group at
+          // whatever the CTA leaves behind, and the scroll view absorbs the
+          // rest instead of asserting. This also replaces the Spacer that used
+          // to push the CTA right: Expanded already fills that space.
+          //
+          // Deliberately NOT a width heuristic (e.g. hiding the Share label
+          // below some breakpoint): the row's natural width depends on the
+          // locale and the user's font scale, so any fixed threshold is wrong
+          // for someone. This can't overflow for anyone.
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Like — rebuilds from the shared store, so the heart and
+                  // count are correct on every rebuild and stay in step with
+                  // the other tabs.
+                  ListenableBuilder(
+                    listenable: LikesStore.instance,
+                    builder: (context, _) {
+                      final liked = LikesStore.instance.isLiked(s.id);
+                      return _iconAction(
+                        icon: liked ? Icons.favorite : Icons.favorite_border,
+                        color:
+                            liked ? AppColors.accent : AppColors.textSecondary,
+                        label: '${LikesStore.instance.countFor(s)}',
+                        onTap: _toggleLike,
+                      );
+                    },
+                  ),
+                  // Remix count comes straight from the row
+                  // (`statuses.remix_count`, kept in sync by a DB trigger
+                  // whenever someone saves a personalization of this template)
+                  // — there's nothing to toggle here, so tapping it opens the
+                  // detail view, same as tapping the artwork.
+                  if (s.remixCount > 0)
+                    _iconAction(
+                      icon: Icons.repeat,
+                      color: AppColors.textSecondary,
+                      label: '${s.remixCount}',
+                      onTap: widget.onOpen ?? widget.onCustomize,
+                    ),
+                  // Share
+                  _iconAction(
+                    icon: Icons.share_outlined,
+                    color: AppColors.textSecondary,
+                    label: S.t('share'),
+                    busy: _sharing,
+                    onTap: _share,
+                  ),
+                  if (widget.onDelete != null)
+                    _iconAction(
+                      icon: Icons.delete_outline,
+                      color: AppColors.textSecondary,
+                      onTap: widget.onDelete!,
+                    ),
+                ],
+              ),
             ),
-          // Share
-          _iconAction(
-            icon: Icons.share_outlined,
-            color: AppColors.textSecondary,
-            label: S.t('share'),
-            busy: _sharing,
-            onTap: _share,
           ),
-          if (widget.onDelete != null)
-            _iconAction(
-              icon: Icons.delete_outline,
-              color: AppColors.textSecondary,
-              onTap: widget.onDelete!,
-            ),
-          const Spacer(),
           ElevatedButton.icon(
             onPressed: widget.onCustomize,
             icon: Icon(Icons.edit_outlined, size: 16.w),

@@ -110,28 +110,39 @@ class _QuotesSheetState extends State<QuotesSheet> {
                 Icon(Icons.format_quote_rounded,
                     color: AppColors.accent, size: 22.w),
                 SizedBox(width: 8.w),
-                Text(
-                  S.t('tap_quote'),
-                  style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.w700),
+                // Both labels must yield rather than push the refresh button
+                // off-screen — localized strings plus a category chip can
+                // exceed the sheet's content width.
+                Flexible(
+                  child: Text(
+                    S.t('tap_quote'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.w700),
+                  ),
                 ),
                 const Spacer(),
                 if (hasCategory)
-                  Container(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(20.r),
-                    ),
-                    child: Text(
-                      S.cat(widget.category!),
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12.sp,
-                          fontWeight: FontWeight.w600),
+                  Flexible(
+                    child: Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10.w, vertical: 4.h),
+                      decoration: BoxDecoration(
+                        color: AppColors.accent.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(20.r),
+                      ),
+                      child: Text(
+                        S.cat(widget.category!),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12.sp,
+                            fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                 SizedBox(width: 8.w),

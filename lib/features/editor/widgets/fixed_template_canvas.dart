@@ -165,7 +165,11 @@ class FixedTemplateCanvas extends StatelessWidget {
       // editor via "Customize", a centered short line will sit further left
       // there (the user can drag it, since that editor is unlocked anyway).
       child: SizedBox(
-        width: 300,
+        // effectiveBoxWidth, not a literal 300: it resolves to exactly 300 for
+        // every fixed template (none of them set boxWidth), but a design that
+        // *was* width-resized in the free editor and then rendered here keeps
+        // the width it was given instead of snapping back.
+        width: t.effectiveBoxWidth,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: t.highlight != null

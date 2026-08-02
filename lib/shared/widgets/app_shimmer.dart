@@ -93,9 +93,11 @@ class _SlideGradient extends GradientTransform {
 class ShimmerBox extends StatelessWidget {
   final double? width;
   final double? height;
-  final double radius;
+  /// Null falls back to the scaled default. Kept nullable (rather than
+  /// defaulting to `8.r`) so the constructor can stay `const`.
+  final double? radius;
 
-  const ShimmerBox({super.key, this.width, this.height, this.radius = 8});
+  const ShimmerBox({super.key, this.width, this.height, this.radius});
 
   @override
   Widget build(BuildContext context) {
@@ -104,14 +106,15 @@ class ShimmerBox extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: AppColors.cardLight,
-        borderRadius: BorderRadius.circular(radius),
+        borderRadius: BorderRadius.circular(radius ?? 8.r),
       ),
     );
   }
 }
 
-/// A placeholder that mirrors [SavedStatusCard]'s layout (4:5 preview + a small
-/// action bar) so the feed doesn't jump when the real cards arrive.
+/// A placeholder that mirrors [SavedStatusCard]'s layout (9:16 preview + a
+/// small action bar) so the feed doesn't jump when the real cards arrive.
+/// Keep the aspect ratio in sync with [SavedStatusCard].
 class StatusCardShimmer extends StatelessWidget {
   const StatusCardShimmer({super.key});
 
@@ -128,16 +131,16 @@ class StatusCardShimmer extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AspectRatio(
-              aspectRatio: 4 / 5,
+              aspectRatio: 9 / 16,
               child: ShimmerBox(radius: AppDimensions.radiusLarge),
             ),
             Padding(
               padding: EdgeInsets.fromLTRB(12.w, 12.h, 12.w, 12.h),
               child: Row(
                 children: [
-                  ShimmerBox(width: 44.w, height: 16.h, radius: 20),
+                  ShimmerBox(width: 44.w, height: 16.h, radius: 20.r),
                   const Spacer(),
-                  ShimmerBox(width: 96.w, height: 40.h, radius: 22),
+                  ShimmerBox(width: 96.w, height: 40.h, radius: 22.r),
                 ],
               ),
             ),

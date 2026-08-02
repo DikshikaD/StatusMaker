@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
@@ -23,6 +25,7 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _fade;
   late final Animation<double> _textFade;
   bool _navigated = false;
+  Timer? _promptTimer;
 
   @override
   void initState() {
@@ -45,7 +48,8 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _controller.forward();
-    Future.delayed(const Duration(milliseconds: 1900), _promptLanguage);
+    _promptTimer =
+        Timer(const Duration(milliseconds: 1900), _promptLanguage);
   }
 
   void _promptLanguage() {
@@ -64,6 +68,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   void dispose() {
+    _promptTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -115,9 +120,11 @@ class _SplashScreenState extends State<SplashScreen>
               child: SizedBox(
                 width: 24.w,
                 height: 24.w,
-                child: const CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.accent),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2.r,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppColors.accent,
+                  ),
                 ),
               ),
             ),

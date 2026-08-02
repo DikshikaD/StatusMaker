@@ -151,7 +151,10 @@ class _MainLayoutState extends State<MainLayout> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: List.generate(
               _items.length,
-              (i) => _navItem(i, _items[i], current),
+              // Loose Flexible: items keep their intrinsic width when there's
+              // room, but can be squeezed instead of overflowing the bar when
+              // the selected label is long (localized / large text scale).
+              (i) => Flexible(child: _navItem(i, _items[i], current)),
             ),
           ),
         ),
@@ -191,23 +194,32 @@ class _MainLayoutState extends State<MainLayout> {
                 size: 24.w,
               ),
             ),
-            // Label slides in only for the selected item.
-            AnimatedSize(
-              duration: const Duration(milliseconds: 280),
-              curve: Curves.easeOutCubic,
-              child: selected
-                  ? Padding(
-                      padding: EdgeInsets.only(left: 8.w),
-                      child: Text(
-                        S.t(item.labelKey),
-                        style: TextStyle(
-                          color: AppColors.accent,
-                          fontSize: 13.sp,
-                          fontWeight: FontWeight.w700,
+            // Label slides in only for the selected item. Flexible here (a
+            // direct child of this Row) is what gives the Text a bounded
+            // width, so the ellipsis below can actually take effect.
+            Flexible(
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutCubic,
+                child: selected
+                    ? Padding(
+                        padding: EdgeInsets.only(left: 8.w),
+                        // Ellipsize rather than overflow: a long localized
+                        // label at a large text scale otherwise blows out the
+                        // whole nav bar, since nothing else here can yield.
+                        child: Text(
+                          S.t(item.labelKey),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.accent,
+                            fontSize: 13.sp,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                    )
-                  : const SizedBox.shrink(),
+                      )
+                    : const SizedBox.shrink(),
+              ),
             ),
           ],
         ),

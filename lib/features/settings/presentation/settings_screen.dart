@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
+import 'package:status_maker/features/dev/presentation/seed_feed_screen.dart';
 import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/utils/responsive.dart';
@@ -50,6 +52,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _row(Icons.star_outline, S.t('rate_us')),
           _row(Icons.ios_share, S.t('share_app')),
           _row(Icons.info_outline, '${S.t('version')}  1.0.0', tappable: false),
+
+          // Debug-only. Stripped from release builds by the const kDebugMode
+          // check, and SeedFeedScreen.open() refuses to push there anyway.
+          // Deliberately unlocalized — it never ships.
+          if (kDebugMode) ...[
+            SizedBox(height: 32.h),
+            _sectionTitle('Developer'),
+            SizedBox(height: 12.h),
+            Padding(
+              padding: EdgeInsets.only(bottom: 4.h),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(Icons.cloud_upload_outlined,
+                    color: AppColors.textSecondary),
+                title: Text('Seed public feed',
+                    style: TextStyle(
+                        fontSize: 15.sp, color: AppColors.textPrimary)),
+                subtitle: Text('Publish bundled templates to Home',
+                    style: TextStyle(
+                        fontSize: 12.sp, color: AppColors.textSecondary)),
+                trailing:
+                    Icon(Icons.chevron_right, color: AppColors.textSecondary),
+                onTap: () => SeedFeedScreen.open(context),
+              ),
+            ),
+          ],
         ],
       ),
     );

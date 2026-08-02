@@ -177,7 +177,9 @@ Deno.serve(async (req) => {
 
     const { data: tokens, error } = await supabase
       .from('device_tokens')
-      .select('token')
+      // `lang` decides the wording per device — the same user can have an
+      // English phone and a Hindi one.
+      .select('token, lang')
       .eq('user_id', record.recipient_id);
     if (error) throw error;
 
@@ -204,29 +206,60 @@ Deno.serve(async (req) => {
     // Deliberately anonymous: users are anonymous accounts today, so there is no
     // display name to use. Add a profiles table and this becomes "<name> liked…"
     // / "<name> remixed…".
-    const copy: Record<string, { title: string; body: (t: string | null) => string }> = {
-      like: {
-        title: 'Someone liked your status ❤️',
-        body: (t) => (t ? `Your status "${t}" got a new like.` : 'Your status got a new like.'),
+    // Keep in sync with the `push_*` keys in lib/core/localization/strings.dart,
+    // which word the in-app banner. Any language missing here falls back to
+    // English rather than sending nothing.
+    type Copy = { title: string; body: (t: string | null) => string };
+    const copy: Record<string, Record<string, Copy>> = {
+      en: {
+        like: {
+          title: 'Someone liked your status ❤️',
+          body: (t) =>
+            t ? `Your status "${t}" got a new like.` : 'Your status got a new like.',
+        },
+        remix: {
+          title: 'Someone remixed your template 🔁',
+          body: (t) =>
+            t ? `Someone used your template "${t}".` : 'Someone used your template.',
+        },
       },
-      remix: {
-        title: 'Someone remixed your template 🔁',
-        body: (t) =>
-          t ? `Someone used your template "${t}".` : 'Someone used your template.',
+      hi: {
+        like: {
+          title: 'किसी ने आपका स्टेटस पसंद किया ❤️',
+          body: (t) =>
+            t
+              ? `आपके स्टेटस "${t}" को नया लाइक मिला।`
+              : 'आपके स्टेटस को नया लाइक मिला।',
+        },
+        remix: {
+          title: 'किसी ने आपका टेम्पलेट रीमिक्स किया 🔁',
+          body: (t) =>
+            t
+              ? `किसी ने आपका टेम्पलेट "${t}" इस्तेमाल किया।`
+              : 'किसी ने आपका टेम्पलेट इस्तेमाल किया।',
+        },
       },
     };
-    const { title, body: bodyFor } = copy[record.type];
-    const body = bodyFor(statusTitle);
+
+    const copyFor = (lang: string | null) => {
+      const table = copy[lang ?? 'en'] ?? copy.en;
+      const entry = table[record.type] ?? copy.en[record.type];
+      return { title: entry.title, body: entry.body(statusTitle) };
+    };
 
     const accessToken = await getAccessToken(account);
     const results = await Promise.all(
-      tokens.map((t) =>
-        sendPush(account.project_id, accessToken, t.token, title, body, {
+      tokens.map((t) => {
+        const { title, body } = copyFor(t.lang);
+        return sendPush(account.project_id, accessToken, t.token, title, body, {
           type: record.type,
           status_id: record.status_id ?? '',
           notification_id: record.id,
-        }).then((outcome) => ({ token: t.token, outcome })),
-      ),
+          // Lets the in-app banner name the status when it re-words this in
+          // the language the user has selected right now.
+          status_title: statusTitle ?? '',
+        }).then((outcome) => ({ token: t.token, outcome }));
+      }),
     );
 
     const dead = results.filter((r) => r.outcome === 'gone').map((r) => r.token);

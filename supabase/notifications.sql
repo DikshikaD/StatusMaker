@@ -41,6 +41,16 @@ create table if not exists public.device_tokens (
   updated_at timestamptz not null default now()
 );
 
+-- Language this device last registered with ('en' | 'hi'). The Edge Function
+-- words the tray notification in it, since a closed app can't word anything
+-- itself. Defaults to 'en' so rows that predate this column keep working.
+--
+-- Only used while the app is CLOSED. With the app open the in-app banner
+-- re-words from the live setting instead (see PushService._localizedCopy),
+-- because this column is only as fresh as the last registration.
+alter table public.device_tokens
+  add column if not exists lang text not null default 'en';
+
 create index if not exists device_tokens_user_idx on public.device_tokens (user_id);
 
 -- ---------------------------------------------------------------------------

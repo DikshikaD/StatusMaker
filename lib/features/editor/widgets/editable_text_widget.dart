@@ -9,7 +9,13 @@ class EditableTextWidget extends StatelessWidget {
   final VoidCallback onSelect;
   final VoidCallback onDelete;
   final VoidCallback onEdit; // double-tap to edit words inline
-  final void Function(Offset position, double scale, double rotation) onTransformEnd;
+  final Size canvasSize;
+  final void Function(
+    Offset position,
+    double scale,
+    double rotation,
+    double? boxWidth,
+  ) onTransformEnd;
 
   const EditableTextWidget({
     super.key,
@@ -19,6 +25,7 @@ class EditableTextWidget extends StatelessWidget {
     required this.onDelete,
     required this.onEdit,
     required this.onTransformEnd,
+    required this.canvasSize,
   });
 
   @override
@@ -28,25 +35,29 @@ class EditableTextWidget extends StatelessWidget {
       scale: textObject.scale,
       rotation: textObject.rotation,
       isSelected: isSelected,
+      canvasSize: canvasSize,
+      // Non-null, so corner handles resize the box's width (re-wrapping the
+      // text) instead of scaling it proportionally. TransformableObject applies
+      // this as the max-width constraint — deliberately not done here, so an
+      // in-progress drag can render at its live width rather than the last
+      // committed one.
+      boxWidth: textObject.effectiveBoxWidth,
       onSelect: onSelect,
       onDelete: onDelete,
       onDoubleTap: onEdit,
       onTransformEnd: onTransformEnd,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 300),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: textObject.highlight != null
-              ? BoxDecoration(
-                  color: textObject.highlight,
-                  borderRadius: BorderRadius.circular(8),
-                )
-              : null,
-          child: Text(
-            textObject.text.isEmpty ? ' ' : textObject.text,
-            textAlign: textObject.textAlign,
-            style: buildTextStyle(textObject),
-          ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: textObject.highlight != null
+            ? BoxDecoration(
+                color: textObject.highlight,
+                borderRadius: BorderRadius.circular(8),
+              )
+            : null,
+        child: Text(
+          textObject.text.isEmpty ? ' ' : textObject.text,
+          textAlign: textObject.textAlign,
+          style: buildTextStyle(textObject),
         ),
       ),
     );

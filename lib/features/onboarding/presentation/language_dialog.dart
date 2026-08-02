@@ -39,7 +39,7 @@ Future<void> showLanguagePicker(
                   borderRadius: BorderRadius.circular(16.r),
                   border: Border.all(
                     color: isSel ? AppColors.accentLight : AppColors.border,
-                    width: isSel ? 2 : 1,
+                    width: isSel ? 2.r : 1.r,
                   ),
                 ),
                 child: Row(
@@ -103,82 +103,94 @@ Future<void> showLanguagePicker(
             );
           }
 
-          return Dialog(
-            backgroundColor: AppColors.surface,
-            insetPadding: EdgeInsets.symmetric(horizontal: 28.w),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24.r),
-            ),
-            child: Padding(
-              padding: EdgeInsets.all(24.w),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 56.w,
-                    height: 56.w,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: AppColors.accentGradient,
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.translate, color: Colors.white, size: 28.w),
-                  ),
-                  SizedBox(height: 16.h),
-                  Text(
-                    S.t('choose_language'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 20.sp,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  SizedBox(height: 6.h),
-                  Text(
-                    S.t('choose_language_desc'),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13.sp,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  SizedBox(height: 20.h),
-                  option('en', 'English', 'English'),
-                  option('hi', 'हिंदी', 'Hindi'),
-                  SizedBox(height: 8.h),
-                  GestureDetector(
-                    onTap: () {
-                      S.set(selected);
-                      Navigator.of(dialogContext).pop();
-                      onContinue();
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      height: 52.h,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: AppColors.accentGradient,
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
+          // The picker is a mandatory first-run step: the caller only advances
+          // from [onContinue]. Block the Android back button too, otherwise the
+          // route pops without ever running it and the splash — which has
+          // already latched `_navigated` — is left with nothing to advance it.
+          return PopScope(
+            canPop: false,
+            child: Dialog(
+              backgroundColor: AppColors.surface,
+              insetPadding: EdgeInsets.symmetric(horizontal: 28.w),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24.r),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(24.w),
+                // Scrollable so the Continue button stays reachable in
+                // landscape and at large system text scales.
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 56.w,
+                        height: 56.w,
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: AppColors.accentGradient,
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          shape: BoxShape.circle,
                         ),
-                        borderRadius: BorderRadius.circular(28.r),
+                        child: Icon(Icons.translate,
+                            color: Colors.white, size: 28.w),
                       ),
-                      child: Text(
-                        S.t('continue_btn'),
+                      SizedBox(height: 16.h),
+                      Text(
+                        S.t('choose_language'),
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 16.sp,
+                          fontSize: 20.sp,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                    ),
+                      SizedBox(height: 6.h),
+                      Text(
+                        S.t('choose_language_desc'),
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      SizedBox(height: 20.h),
+                      option('en', 'English', 'English'),
+                      option('hi', 'हिंदी', 'Hindi'),
+                      SizedBox(height: 8.h),
+                      GestureDetector(
+                        onTap: () {
+                          S.set(selected);
+                          Navigator.of(dialogContext).pop();
+                          onContinue();
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          height: 52.h,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: AppColors.accentGradient,
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            borderRadius: BorderRadius.circular(28.r),
+                          ),
+                          child: Text(
+                            S.t('continue_btn'),
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           );

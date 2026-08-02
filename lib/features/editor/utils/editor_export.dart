@@ -12,8 +12,15 @@ Future<Uint8List?> captureCanvas(GlobalKey key, {double pixelRatio = 3.0}) async
   final obj = key.currentContext?.findRenderObject();
   if (obj is! RenderRepaintBoundary) return null;
   final image = await obj.toImage(pixelRatio: pixelRatio);
-  final data = await image.toByteData(format: ui.ImageByteFormat.png);
-  return data?.buffer.asUint8List();
+  try {
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    return data?.buffer.asUint8List();
+  } finally {
+    // ui.Image holds native memory that GC only reclaims non-deterministically
+    // — at 3x a canvas export is several MB, so repeated saves in one session
+    // would grow unbounded without this.
+    image.dispose();
+  }
 }
 
 String _fileName() => 'status_${DateTime.now().millisecondsSinceEpoch}.png';

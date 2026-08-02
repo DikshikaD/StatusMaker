@@ -32,6 +32,7 @@ class _StatusCanvasState extends State<StatusCanvas> {
   void initState() {
     super.initState();
     widget.controller.editRequest.addListener(_onEditRequest);
+    _focusNode.addListener(_onFocusChange);
   }
 
   /// Opens the inline editor when the controller asks (e.g. right after the
@@ -56,6 +57,9 @@ class _StatusCanvasState extends State<StatusCanvas> {
 
   @override
   void dispose() {
+    // Don't lose an in-progress edit if the route is torn down mid-typing.
+    _focusNode.removeListener(_onFocusChange);
+    _commitEditing(rebuild: false);
     widget.controller.editRequest.removeListener(_onEditRequest);
     _editController.dispose();
     _focusNode.dispose();
@@ -70,7 +74,12 @@ class _StatusCanvasState extends State<StatusCanvas> {
     setState(() => _editingId = t.id);
   }
 
-  void _commitEditing() {
+  /// Commits whatever is in the inline editor back to the controller.
+  ///
+  /// [rebuild] must be false when called from [dispose] — setState is illegal
+  /// there. The parent owns the controller and disposes it after its children,
+  /// so writing to it from here is still safe.
+  void _commitEditing({bool rebuild = true}) {
     final id = _editingId;
     if (id == null) return;
     // Closing a text with no content removes it, instead of leaving a blank.
@@ -79,132 +88,163 @@ class _StatusCanvasState extends State<StatusCanvas> {
     } else {
       widget.controller.updateTextContent(id, _editController.text);
     }
-    setState(() => _editingId = null);
+    _editingId = null;
+    if (rebuild) setState(() {});
+  }
+
+  /// The IME can be dismissed without ever firing onEditingComplete or
+  /// onTapOutside — Android's system back does exactly that. Without this the
+  /// typed text is never written back, isDirty is never set, and the next back
+  /// press pops the editor with no discard prompt and the edit silently lost.
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) _commitEditing();
   }
 
   @override
   Widget build(BuildContext context) {
     final c = widget.controller;
 
-    final borderRadius = BorderRadius.circular(24);
-
     return RepaintBoundary(
       key: widget.repaintKey,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Only the decorative background is clipped to the rounded card
-          // shape. The interactive layer below is deliberately NOT inside a
-          // ClipRRect: RenderClipRRect also clips hit-testing (not just
-          // painting), so a draggable object's delete handle would silently
-          // stop receiving taps the moment it neared the canvas edge — the
-          // object still looked fine, but its corner brushed the clip
-          // boundary and the handle's small overhang landed just outside
-          // the tappable region. A rounded border painted on top gives the
-          // same visual card shape without clipping hit-testing.
-          ClipRRect(
-            borderRadius: borderRadius,
-            child: TemplateBackground(
-              state: c.background,
-              onTap: () {
-                _commitEditing();
-                c.clearSelection();
-              },
-            ),
-          ),
+      // The canvas's real laid-out size on this device — it varies with screen
+      // width, and changes on rotation/resize. Objects need it to clamp
+      // dragging to the canvas, so it's measured here rather than assumed from
+      // the 360x640 design space (which is only the authoring coordinate
+      // system, not what anything is actually laid out at).
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final canvasSize = constraints.biggest;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              TemplateBackground(
+                state: c.background,
+                onTap: () {
+                  _commitEditing();
+                  c.clearSelection();
+                },
+              ),
 
-          // Vector elements (stickers)
-          ...c.elements.map((el) {
-            return ValueListenableBuilder<String?>(
-              key: ValueKey('el_${el.id}'),
-              valueListenable: c.selectedId,
-              builder: (context, sel, _) {
-                return EditableElementWidget(
-                  element: el,
-                  isSelected: sel == el.id,
-                  onSelect: () => c.select(el.id),
-                  onDelete: () {
-                    debugPrint('[StatusCanvas] deleteElement(${el.id})');
-                    c.deleteElement(el.id);
-                  },
-                  onTransformEnd: (p, s, r) => c.updateElementTransform(
-                    el.id,
-                    position: p,
-                    scale: s,
-                    rotation: r,
-                  ),
-                );
-              },
-            );
-          }),
+              // Elements, images and texts share ONE stacking order (zIndex) so
+              // paint order (and therefore hit-test order) matches whatever the
+              // user actually layered on top of what, instead of always
+              // painting every text above every image above every element
+              // regardless of what was added or dragged where. Without this, an
+              // element mostly covered by an image/text placed on top of it
+              // could become impossible to grab at all once a few objects
+              // overlapped — exactly the "stuck" symptom this fixes. See
+              // EditorController.zIndex.
+              ..._orderedLayers(c, canvasSize),
 
-          // Floating images
-          ...c.images.map((img) {
-            return ValueListenableBuilder<String?>(
-              key: ValueKey('img_${img.id}'),
-              valueListenable: c.selectedId,
-              builder: (context, sel, _) {
-                return EditableImageWidget(
-                  image: img,
-                  isSelected: sel == img.id,
-                  onSelect: () => c.select(img.id),
-                  onDelete: () {
-                    debugPrint('[StatusCanvas] deleteImage(${img.id})');
-                    c.deleteImage(img.id);
-                  },
-                  onTransformEnd: (p, s, r) => c.updateImageTransform(
-                    img.id,
-                    position: p,
-                    scale: s,
-                    rotation: r,
-                  ),
-                );
-              },
-            );
-          }),
-
-          // Texts
-          ...c.texts.map((t) {
-            if (_editingId == t.id) return _buildInlineEditor(t);
-            return ValueListenableBuilder<String?>(
-              key: ValueKey('txt_${t.id}'),
-              valueListenable: c.selectedId,
-              builder: (context, sel, _) {
-                return EditableTextWidget(
-                  textObject: t,
-                  isSelected: sel == t.id,
-                  onSelect: () => c.select(t.id),
-                  onDelete: () {
-                    debugPrint('[StatusCanvas] deleteText(${t.id})');
-                    c.deleteText(t.id);
-                  },
-                  onEdit: () => _startEditing(t),
-                  onTransformEnd: (p, s, r) => c.updateTextTransform(
-                    t.id,
-                    position: p,
-                    scale: s,
-                    rotation: r,
-                  ),
-                );
-              },
-            );
-          }),
-
-          // Full-status decorative frame — always on top, never interactive.
-          if (c.frame != StatusFrame.none)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(
-                  painter: FramePainter(
-                    frame: c.frame,
-                    color: c.frameColor,
-                    width: c.frameWidth,
+              // Full-status decorative frame — always on top, never interactive.
+              if (c.frame != StatusFrame.none)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      painter: FramePainter(
+                        frame: c.frame,
+                        color: c.frameColor,
+                        width: c.frameWidth,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-        ],
+            ],
+          );
+        },
       ),
+    );
+  }
+
+  /// Elements, images and texts merged into one list, ordered by zIndex —
+  /// ties (e.g. every object in a design saved before zIndex existed, which
+  /// all default to 0) fall back to the original elements-then-images-then-
+  /// texts grouping, in each list's own order, so old designs keep rendering
+  /// exactly as before.
+  List<Widget> _orderedLayers(EditorController c, Size canvasSize) {
+    final layers = <(int, int, int, Widget)>[
+      for (var i = 0; i < c.elements.length; i++)
+        (c.elements[i].zIndex, 0, i, _elementLayer(c, c.elements[i], canvasSize)),
+      for (var i = 0; i < c.images.length; i++)
+        (c.images[i].zIndex, 1, i, _imageLayer(c, c.images[i], canvasSize)),
+      for (var i = 0; i < c.texts.length; i++)
+        (c.texts[i].zIndex, 2, i, _textLayer(c, c.texts[i], canvasSize)),
+    ]..sort((a, b) {
+        final z = a.$1.compareTo(b.$1);
+        if (z != 0) return z;
+        final t = a.$2.compareTo(b.$2);
+        if (t != 0) return t;
+        return a.$3.compareTo(b.$3);
+      });
+    return [for (final l in layers) l.$4];
+  }
+
+  Widget _elementLayer(EditorController c, ElementObject el, Size canvasSize) {
+    return ValueListenableBuilder<String?>(
+      key: ValueKey('el_${el.id}'),
+      valueListenable: c.selectedId,
+      builder: (context, sel, _) {
+        return EditableElementWidget(
+          element: el,
+          isSelected: sel == el.id,
+          canvasSize: canvasSize,
+          onSelect: () => c.select(el.id),
+          onDelete: () => c.deleteElement(el.id),
+          onTransformEnd: (p, s, r, _) => c.updateElementTransform(
+            el.id,
+            position: p,
+            scale: s,
+            rotation: r,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _imageLayer(EditorController c, ImageObject img, Size canvasSize) {
+    return ValueListenableBuilder<String?>(
+      key: ValueKey('img_${img.id}'),
+      valueListenable: c.selectedId,
+      builder: (context, sel, _) {
+        return EditableImageWidget(
+          image: img,
+          isSelected: sel == img.id,
+          canvasSize: canvasSize,
+          onSelect: () => c.select(img.id),
+          onDelete: () => c.deleteImage(img.id),
+          onTransformEnd: (p, s, r, _) => c.updateImageTransform(
+            img.id,
+            position: p,
+            scale: s,
+            rotation: r,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _textLayer(EditorController c, TextObject t, Size canvasSize) {
+    if (_editingId == t.id) return _buildInlineEditor(t);
+    return ValueListenableBuilder<String?>(
+      key: ValueKey('txt_${t.id}'),
+      valueListenable: c.selectedId,
+      builder: (context, sel, _) {
+        return EditableTextWidget(
+          textObject: t,
+          isSelected: sel == t.id,
+          canvasSize: canvasSize,
+          onSelect: () => c.select(t.id),
+          onDelete: () => c.deleteText(t.id),
+          onEdit: () => _startEditing(t),
+          onTransformEnd: (p, s, r, w) => c.updateTextTransform(
+            t.id,
+            position: p,
+            scale: s,
+            rotation: r,
+            boxWidth: w,
+          ),
+        );
+      },
     );
   }
 
@@ -218,9 +258,14 @@ class _StatusCanvasState extends State<StatusCanvas> {
         child: Transform.scale(
           scale: t.scale,
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            // Must match TransformableObject's content padding — see
+            // kObjectContentPadding. A different value here shifts the
+            // transform pivot and the text jumps when editing begins.
+            padding: const EdgeInsets.all(kObjectContentPadding),
             child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 300),
+            // Same width the object lays out at normally, so switching into
+            // and out of editing never re-wraps the text under the cursor.
+            constraints: BoxConstraints(maxWidth: t.effectiveBoxWidth),
             child: IntrinsicWidth(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

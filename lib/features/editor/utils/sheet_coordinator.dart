@@ -16,6 +16,14 @@ class SheetCoordinator {
 
   static bool _open = false;
 
+  /// Identifies which [show] call currently owns [_open]. A plain bool is not
+  /// enough: the outgoing sheet's `finally` and the incoming call's `_open =
+  /// true` are both ~[_closeTransition] away and unordered, so the outgoing
+  /// one could clear the flag while the incoming sheet is open. The next call
+  /// would then skip the close-first step and stack a second sheet. Only the
+  /// call that still owns the current generation may clear the flag.
+  static int _generation = 0;
+
   /// Matches the stock modal-bottom-sheet exit transition duration, so the
   /// next sheet only appears once the current one has visibly finished
   /// closing.
@@ -27,9 +35,13 @@ class SheetCoordinator {
     Color backgroundColor = Colors.transparent,
     bool isScrollControlled = true,
   }) async {
+    final generation = ++_generation;
     if (_open) {
       Navigator.of(context).maybePop();
       await Future.delayed(_closeTransition);
+      // The editor can be popped while we wait out the close animation;
+      // showing from a deactivated context throws.
+      if (!context.mounted) return null;
     }
     _open = true;
     try {
@@ -40,7 +52,8 @@ class SheetCoordinator {
         builder: builder,
       );
     } finally {
-      _open = false;
+      // Only clear if a newer sheet hasn't taken ownership in the meantime.
+      if (_generation == generation) _open = false;
     }
   }
 }

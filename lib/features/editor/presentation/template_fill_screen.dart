@@ -13,6 +13,7 @@ import 'package:status_maker/features/editor/data/status_design.dart';
 import 'package:status_maker/features/editor/presentation/photo_reposition_screen.dart';
 import 'package:status_maker/features/editor/utils/editor_export.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
+import 'package:status_maker/features/editor/widgets/discard_changes_dialog.dart';
 import 'package:status_maker/features/editor/widgets/fixed_template_canvas.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/locked_toolbars.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
@@ -49,6 +50,26 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   bool _exporting = false;
   bool _busy = false;
   String? _statusId;
+
+  /// Whether anything has been changed since the last successful save — drives
+  /// the "Discard changes?" prompt on the way out.
+  ///
+  /// A plain field rather than the free editor's EditorController.isDirty:
+  /// this screen deliberately doesn't use EditorController at all (the layout
+  /// is locked, so there's nothing to move/resize/undo), it just holds the
+  /// three lists directly. Every mutation here goes through [_edit], which is
+  /// the single place that sets it.
+  bool _dirty = false;
+
+  /// Applies a change to the locked design and records it as unsaved. Every
+  /// mutator funnels through this rather than calling setState directly, so a
+  /// new one can't quietly skip the dirty flag.
+  void _edit(VoidCallback change) {
+    setState(() {
+      change();
+      _dirty = true;
+    });
+  }
 
   FixedTemplate get _t => widget.template;
 
@@ -113,7 +134,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     // Clearing a slot is allowed and safe: the layout is fixed, so an empty
     // slot just leaves its space blank instead of reflowing the design (handy
     // for dropping a caption you don't want).
-    setState(() {
+    _edit(() {
       final i = _texts.indexWhere((e) => e.id == t.id);
       if (i != -1) _texts[i] = _texts[i].copyWith(text: text);
     });
@@ -135,7 +156,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   /// change the slot's footprint reach here (font, colour, bold, italic) — see
   /// [LockedTextToolbar].
   void _updateTextStyle(TextObject updated) {
-    setState(() {
+    _edit(() {
       final i = _texts.indexWhere((e) => e.id == updated.id);
       if (i != -1) _texts[i] = updated;
     });
@@ -159,7 +180,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     if (proto == null) return;
     final path = await _pickPhoto();
     if (path == null) return;
-    setState(() {
+    _edit(() {
       _photo = (_photo ?? proto.copyWith()).copyWith(
         path: path,
         isPlaceholder: false,
@@ -183,7 +204,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
       ),
     );
     if (result != null) {
-      setState(() {
+      _edit(() {
         _photo = img.copyWith(
           photoOffset: result.offset,
           photoScale: result.scale,
@@ -193,7 +214,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   }
 
   void _removePhoto() {
-    setState(() {
+    _edit(() {
       // Visible slots revert to their "Add photo" frame; hidden overlay slots
       // disappear entirely.
       final proto = _t.photo;
@@ -206,7 +227,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   void _toggleFrame() {
     final img = _photo;
     if (img == null) return;
-    setState(() => _photo = img.copyWith(framed: !img.framed));
+    _edit(() => _photo = img.copyWith(framed: !img.framed));
   }
 
   // ---- save / post / share ----------------------------------------------------
@@ -314,12 +335,41 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
         existingId: _statusId,
       );
       _statusId = saved.id;
+      // What's on the canvas now matches what's stored.
+      _dirty = false;
       _ok(makePublic ? S.t('posted_public') : S.t('saved_cloud'));
       return true;
     } catch (_) {
       _fail(S.t('something_wrong'));
       return false;
     }
+  }
+
+  // ---- unsaved changes ------------------------------------------------------
+  /// Guards Android's system back, the iOS back swipe and the AppBar arrow.
+  /// Returns whether the editor should actually close — Save only closes on a
+  /// successful save, so a failed upload never costs the user their edits.
+  Future<bool> _confirmExit() async {
+    if (!_dirty) return true;
+    final choice = await showDiscardChangesDialog(context);
+    switch (choice) {
+      case DiscardChoice.discard:
+        return true;
+      case DiscardChoice.cancel:
+        return false;
+      case DiscardChoice.save:
+        // _onSave navigates away itself on success; popping here as well would
+        // tear an extra route off the stack.
+        await _onSave();
+        return false;
+    }
+  }
+
+  /// The AppBar arrow. `Navigator.maybePop` would consult the PopScope below
+  /// and prompt twice, so this asks directly and pops only on a yes.
+  Future<void> _onBackPressed() async {
+    if (!await _confirmExit()) return;
+    if (mounted) Navigator.of(context).pop();
   }
 
   // ---- ui -----------------------------------------------------------------
@@ -330,6 +380,22 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     // the free editor's reservation; taller states simply overlay this margin.
     final reserved = 128.h + ScreenUtil.bottomBarHeight;
 
+    // Covers Android's system back and the iOS back-swipe. An untouched
+    // template keeps the native gesture fully interactive; only unsaved edits
+    // block the pop and ask.
+    return PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return; // canPop was true — nothing to guard
+        final leave = await _confirmExit();
+        if (!leave || !mounted) return;
+        Navigator.of(context).pop();
+      },
+      child: _body(reserved),
+    );
+  }
+
+  Widget _body(double reserved) {
     return Scaffold(
       backgroundColor: AppColors.background,
       resizeToAvoidBottomInset: false,
@@ -396,7 +462,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
           IconButton(
             icon: Icon(Icons.arrow_back,
                 color: AppColors.textPrimary, size: 20.w),
-            onPressed: () => Navigator.of(context).maybePop(),
+            onPressed: _onBackPressed,
             padding: EdgeInsets.zero,
             constraints: BoxConstraints(minWidth: 40.w, minHeight: 40.w),
             visualDensity: VisualDensity.compact,

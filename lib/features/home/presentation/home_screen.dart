@@ -7,6 +7,7 @@ import 'package:status_maker/shared/widgets/app_shimmer.dart';
 import 'package:status_maker/shared/widgets/empty_state.dart';
 import 'package:status_maker/features/explore/presentation/explore_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
+import 'package:status_maker/features/preview/presentation/template_detail_screen.dart';
 import 'package:status_maker/features/statuses/data/likes_store.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
@@ -310,10 +311,21 @@ class _HomeScreenState extends State<HomeScreen> {
           child: SavedStatusCard(
             status: _statuses[i],
             tag: tag,
+            onOpen: () => _openDetail(context, _statuses[i]),
             onCustomize: () => _openEditor(context, _statuses[i]),
           ),
         ),
       ),
+    );
+  }
+
+  /// Tapping a card shows the status as it is, rather than dropping straight
+  /// into the editor. Same destination a notification tap opens (see
+  /// PushService._openFromData), so both routes feel like the same place.
+  void _openDetail(BuildContext context, SavedStatus status) {
+    Navigator.push(
+      context,
+      FadeSlidePageRoute(page: TemplateDetailScreen(status: status)),
     );
   }
 

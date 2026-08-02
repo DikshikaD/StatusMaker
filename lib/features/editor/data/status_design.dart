@@ -6,6 +6,12 @@ import 'package:status_maker/features/editor/data/template_motif.dart';
 /// migrated on load instead of breaking.
 const int kDesignSchemaVersion = 1;
 
+/// Canvas size assumed for a design that doesn't record its own (older rows
+/// saved before `canvasSize` existed, and the base fixed templates author
+/// against exactly this size — see `kFixedCanvasSize` in fixed_templates.dart,
+/// which is defined in terms of this constant).
+const Size kDesignDefaultCanvasSize = Size(360, 640);
+
 // ---------------------------------------------------------------------------
 // Primitive converters
 // ---------------------------------------------------------------------------
@@ -69,6 +75,12 @@ Map<String, dynamic> _textToJson(TextObject t) => {
       'pos': _off(t.position),
       'scale': t.scale,
       'rotation': t.rotation,
+      // Additive: absent in every design saved before hand-resizable text
+      // boxes existed. Those deserialize to null, which TextObject resolves to
+      // kDefaultTextBoxWidth — the width they were laid out with — so old rows
+      // render unchanged and need no migration.
+      'boxWidth': t.boxWidth,
+      'z': t.zIndex,
     };
 
 TextObject _textFromJson(Map j) => TextObject(
@@ -86,6 +98,8 @@ TextObject _textFromJson(Map j) => TextObject(
       position: _offset(j['pos']),
       scale: _d(j['scale'], 1),
       rotation: _d(j['rotation'], 0),
+      boxWidth: (j['boxWidth'] as num?)?.toDouble(),
+      zIndex: (j['z'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _imageToJson(ImageObject i) => {
@@ -100,6 +114,7 @@ Map<String, dynamic> _imageToJson(ImageObject i) => {
       'frameColor': _col(i.frameColor),
       'photoOffset': _off(i.photoOffset),
       'photoScale': i.photoScale,
+      'z': i.zIndex,
     };
 
 ImageObject _imageFromJson(Map j) => ImageObject(
@@ -117,6 +132,7 @@ ImageObject _imageFromJson(Map j) => ImageObject(
       photoOffset:
           j['photoOffset'] == null ? Offset.zero : _offset(j['photoOffset']),
       photoScale: _d(j['photoScale'], 1),
+      zIndex: (j['z'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _elementToJson(ElementObject e) => {
@@ -128,6 +144,7 @@ Map<String, dynamic> _elementToJson(ElementObject e) => {
       'rotation': e.rotation,
       'stroke': e.strokeWidth,
       'assetPath': e.assetPath,
+      'z': e.zIndex,
     };
 
 ElementObject _elementFromJson(Map j) => ElementObject(
@@ -139,6 +156,7 @@ ElementObject _elementFromJson(Map j) => ElementObject(
       scale: _d(j['scale'], 1),
       rotation: _d(j['rotation'], 0),
       strokeWidth: _d(j['stroke'], 1),
+      zIndex: (j['z'] as num?)?.toInt() ?? 0,
     );
 
 // ---------------------------------------------------------------------------
@@ -154,6 +172,15 @@ class StatusDesign {
   final Color frameColor;
   final double frameWidth;
 
+  /// The canvas size (in logical pixels) every position/scale in this design
+  /// was authored against. The free editor's canvas isn't a fixed size — it's
+  /// however big the device's screen makes it — so without this, reopening a
+  /// design on a different device silently reinterprets its coordinates in
+  /// the wrong space: text drifts, and elements can land outside the canvas
+  /// entirely. See scaleDesignToCanvas() and where it's applied on load in
+  /// StatusPersonalizerScreen.
+  final Size canvasSize;
+
   StatusDesign({
     this.schemaVersion = kDesignSchemaVersion,
     required this.background,
@@ -163,10 +190,17 @@ class StatusDesign {
     this.frame = StatusFrame.none,
     this.frameColor = Colors.white,
     this.frameWidth = 1.0,
+    this.canvasSize = kDesignDefaultCanvasSize,
   });
 
-  /// Snapshot the current editor state (used on Save).
-  factory StatusDesign.fromController(EditorController c) => StatusDesign(
+  /// Snapshot the current editor state (used on Save). [canvasSize] must be
+  /// the real, laid-out size of the canvas this was edited on, so the design
+  /// can be scaled correctly if it's ever reopened on a different device.
+  factory StatusDesign.fromController(
+    EditorController c, {
+    required Size canvasSize,
+  }) =>
+      StatusDesign(
         background: c.background,
         texts: c.texts,
         images: c.images,
@@ -174,6 +208,7 @@ class StatusDesign {
         frame: c.frame,
         frameColor: c.frameColor,
         frameWidth: c.frameWidth,
+        canvasSize: canvasSize,
       );
 
   Map<String, dynamic> toJson() => {
@@ -185,6 +220,8 @@ class StatusDesign {
         'frame': frame.name,
         'frameColor': _col(frameColor),
         'frameWidth': frameWidth,
+        'canvasW': canvasSize.width,
+        'canvasH': canvasSize.height,
       };
 
   factory StatusDesign.fromJson(Map<String, dynamic> j) => StatusDesign(
@@ -203,6 +240,14 @@ class StatusDesign {
         frameColor:
             j['frameColor'] == null ? Colors.white : _color(j['frameColor']),
         frameWidth: _d(j['frameWidth'], 1),
+        // Older rows saved before this existed have no recorded canvas — the
+        // safest fallback is the fixed-template size, since that's already
+        // the assumption every non-fixed-template save made implicitly before
+        // this fix (every canvas the app has ever rendered starts near there).
+        canvasSize: j['canvasW'] == null
+            ? kDesignDefaultCanvasSize
+            : Size(_d(j['canvasW'], kDesignDefaultCanvasSize.width),
+                _d(j['canvasH'], kDesignDefaultCanvasSize.height)),
       );
 
   /// Load this design into an editor (used when opening or remixing a status).

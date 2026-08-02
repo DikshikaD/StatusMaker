@@ -27,6 +27,59 @@ const List<String> kEditorFonts = [
   'Martel',
 ];
 
+/// The subset of [kEditorFonts] that actually ships Devanagari glyphs.
+///
+/// Everything else is Latin-only: setting Hindi text in one of those doesn't
+/// fail loudly, it silently falls back to a system font, so the design renders
+/// nothing like its preview.
+const Set<String> kDevanagariFonts = {
+  'Poppins', // Indian Type Foundry — has Devanagari
+  'Rozha One',
+  'Tiro Devanagari Hindi',
+  'Baloo 2',
+  'Mukta',
+  'Hind',
+  'Yatra One',
+  'Kalam',
+  'Martel',
+};
+
+/// Latin-only font -> the closest Devanagari-capable substitute, chosen to
+/// preserve the design's character (serif stays serif, script stays script)
+/// rather than collapsing everything onto one fallback.
+const Map<String, String> _devanagariSubstitute = {
+  'Playfair Display': 'Martel', // elegant serif
+  'Roboto Slab': 'Martel', // slab serif
+  'Cinzel': 'Rozha One', // regal display serif
+  'Lobster': 'Yatra One', // display script
+  'Pacifico': 'Yatra One',
+  'Dancing Script': 'Kalam', // handwriting
+  'Caveat': 'Kalam',
+  'Bebas Neue': 'Baloo 2', // heavy condensed display
+  'Oswald': 'Hind', // condensed sans
+  'Montserrat': 'Mukta', // geometric sans
+};
+
+/// Returns a font that can actually render [text].
+///
+/// Only substitutes when the string contains Devanagari and the requested font
+/// can't draw it — Latin text keeps the font the design asked for. Unknown
+/// fonts are left alone rather than guessed at.
+String fontForText(String font, String text) {
+  if (kDevanagariFonts.contains(font)) return font;
+  if (!containsDevanagari(text)) return font;
+  return _devanagariSubstitute[font] ?? 'Mukta';
+}
+
+/// True when [text] contains any character in the Devanagari Unicode block
+/// (U+0900–U+097F).
+bool containsDevanagari(String text) {
+  for (final unit in text.runes) {
+    if (unit >= 0x0900 && unit <= 0x097F) return true;
+  }
+  return false;
+}
+
 // Every text object on the canvas re-resolves its style on EVERY editor
 // rebuild — which fires on any controller change (adding/removing an object,
 // dragging any other object, or dragging a size/spacing/line-height slider,

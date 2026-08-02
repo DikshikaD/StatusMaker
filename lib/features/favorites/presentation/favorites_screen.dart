@@ -12,6 +12,7 @@ import 'package:status_maker/features/statuses/data/likes_store.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
+import 'package:status_maker/features/preview/presentation/template_detail_screen.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
 class FavoritesScreen extends StatefulWidget {
@@ -139,6 +140,9 @@ class _LikedTabState extends State<_LikedTab>
   }
 
   Future<void> _load() async {
+    // Reached from `.then(...)` after the editor route pops — the tab may
+    // already be disposed by then.
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _failed = false;
@@ -160,6 +164,15 @@ class _LikedTabState extends State<_LikedTab>
         _loading = false;
       });
     }
+  }
+
+  /// Tapping a card shows the status as-is. Reloads on return because the
+  /// detail view can unlike it, which removes it from this tab.
+  void _openDetail(SavedStatus status) {
+    Navigator.push(
+      context,
+      FadeSlidePageRoute(page: TemplateDetailScreen(status: status)),
+    ).then((_) => _load());
   }
 
   void _openEditor(SavedStatus status) {
@@ -223,6 +236,7 @@ class _LikedTabState extends State<_LikedTab>
             child: SavedStatusCard(
               status: status,
               tag: status.category == null ? null : S.cat(status.category!),
+              onOpen: () => _openDetail(status),
               onCustomize: () => _openEditor(status),
             ),
           );
@@ -270,6 +284,9 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
   }
 
   Future<void> _load() async {
+    // Reached from `.then(...)` after the editor route pops — the tab may
+    // already be disposed by then.
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _failed = false;
@@ -311,6 +328,14 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
       setState(() => _statuses = previous); // restore on failure
       AppSnackBar.error(context, S.t('something_wrong'));
     }
+  }
+
+  /// Tapping a card shows the status as-is, same as a notification tap.
+  void _openDetail(SavedStatus status) {
+    Navigator.push(
+      context,
+      FadeSlidePageRoute(page: TemplateDetailScreen(status: status)),
+    ).then((_) => _load());
   }
 
   void _openEditor(SavedStatus status) {
@@ -373,6 +398,7 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
             child: SavedStatusCard(
               status: status,
               tag: status.isPublic ? S.t('tag_public') : S.t('tag_private'),
+              onOpen: () => _openDetail(status),
               onCustomize: () => _openEditor(status),
               onDelete: () => _confirmAndDelete(status),
             ),

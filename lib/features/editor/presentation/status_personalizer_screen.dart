@@ -17,6 +17,7 @@ import 'package:status_maker/shared/utils/native_share.dart';
 import 'package:status_maker/shared/widgets/busy_overlay.dart';
 import 'package:status_maker/shared/widgets/share_target_dialog.dart';
 import 'package:status_maker/features/editor/presentation/photo_reposition_screen.dart';
+import 'package:status_maker/features/editor/widgets/discard_changes_dialog.dart';
 import 'package:status_maker/features/editor/widgets/status_canvas.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/add_bar.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/text_toolbar.dart';
@@ -44,11 +45,10 @@ class StatusPersonalizerScreen extends StatefulWidget {
   /// editor has loaded — used by the "Create" flow after a category is chosen.
   final bool showQuotesOnStart;
 
-  /// Set when [initialDesign] uses coordinates authored for a canvas of this
-  /// size rather than this device's canvas — i.e. a ready-made fixed template.
-  /// The design is scaled onto the real canvas on load so it opens looking the
-  /// way it was designed. Null (the default) means the design's coordinates are
-  /// already in this canvas's space, so it loads untouched.
+  /// Overrides [StatusDesign.canvasSize] when [initialDesign] uses coordinates
+  /// authored for a canvas of this size rather than whatever it recorded
+  /// itself — i.e. a ready-made fixed template. Null (the default) just uses
+  /// the design's own recorded [StatusDesign.canvasSize].
   final Size? designCanvasSize;
 
   const StatusPersonalizerScreen({
@@ -87,14 +87,15 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       final design = widget.initialDesign;
       final t = widget.template;
       if (design != null) {
-        // Reopen a saved creation exactly as it was — fully editable. A
-        // ready-made template comes in with its own canvas coordinates, so map
-        // it onto this device's canvas first (this runs post-frame, so the
-        // canvas has been laid out and its real size is available).
-        final authoredFor = widget.designCanvasSize;
-        final toLoad = authoredFor == null
-            ? design
-            : scaleDesignToCanvas(design, authoredFor, _measureCanvas());
+        // Reopen a saved creation exactly as it was — fully editable. Every
+        // design carries the canvas size it was authored against (explicitly
+        // for a ready-made template via widget.designCanvasSize, otherwise
+        // whatever device saved it, via design.canvasSize) — map it onto this
+        // device's actual canvas before loading (this runs post-frame, so the
+        // canvas has been laid out and its real size is available). When the
+        // two sizes already match, scaleDesignToCanvas is a no-op.
+        final authoredFor = widget.designCanvasSize ?? design.canvasSize;
+        final toLoad = scaleDesignToCanvas(design, authoredFor, _measureCanvas());
         toLoad.applyTo(_controller);
         _controller.clearSelection();
         // Undo should only ever revert the user's own edits from here on,
@@ -176,6 +177,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
             // than ~1080p, and this slashes decode memory and file size.
             maxWidth: 1920,
             maxHeight: 1920);
+    // Android can destroy the editor while the gallery is foregrounded;
+    // _controller is disposed with it, so writing to it would throw.
+    if (!mounted) return;
     if (x != null) _controller.addImage(x.path);
   }
 
@@ -194,6 +198,7 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
             // than ~1080p, and this slashes decode memory and file size.
             maxWidth: 1920,
             maxHeight: 1920);
+    if (!mounted) return;
     if (x != null) _controller.fillImage(id, x.path);
   }
 
@@ -265,6 +270,7 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
               imageQuality: 90,
               maxWidth: 1920,
               maxHeight: 1920);
+          if (!mounted) return;
           if (x != null) {
             _controller.setBackground(BackgroundState(imagePath: x.path));
           }
@@ -373,12 +379,45 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     }
   }
 
+  // ---- unsaved changes ------------------------------------------------------
+  /// Guards every way out of the editor: Android's system back, the iOS back
+  /// swipe, and the AppBar arrow all funnel through here.
+  ///
+  /// Returns whether the editor should actually close. Save only closes if the
+  /// save succeeded — a failed upload must keep the user here with their work
+  /// intact rather than dropping it on the floor.
+  Future<bool> _confirmExit() async {
+    if (!_controller.isDirty.value) return true; // nothing to lose
+    final choice = await showDiscardChangesDialog(context);
+    switch (choice) {
+      case DiscardChoice.discard:
+        return true;
+      case DiscardChoice.cancel:
+        return false;
+      case DiscardChoice.save:
+        // _onSave navigates on success by itself (to My Creations), so this
+        // must NOT also pop — doing both would tear an extra route off the
+        // stack. Reporting "don't close" leaves the navigation entirely to
+        // _onSave, and on failure the user simply stays here.
+        await _onSave();
+        return false;
+    }
+  }
+
+  /// The AppBar arrow. `Navigator.maybePop` would consult the PopScope below
+  /// and prompt twice, so it asks directly and pops only on a yes.
+  Future<void> _onBackPressed() async {
+    if (!await _confirmExit()) return;
+    if (mounted) Navigator.of(context).pop();
+  }
+
   /// Returns whether the design actually reached the backend, so the caller
   /// only navigates away on success.
   Future<bool> _cloudSave(
       {required Uint8List bytes, required bool makePublic}) async {
     try {
-      final design = StatusDesign.fromController(_controller);
+      final design =
+          StatusDesign.fromController(_controller, canvasSize: _measureCanvas());
       final saved = await _repo.saveDesign(
         design: design,
         thumbnailBytes: bytes,
@@ -389,6 +428,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         remixOf: _statusId == null ? widget.remixOf : null,
       );
       _statusId = saved.id;
+      // The canvas now matches what's stored, so backing out straight after a
+      // save mustn't re-prompt.
+      _controller.markSaved();
       _ok(makePublic ? S.t('posted_public') : S.t('saved_cloud'));
       return true;
     } catch (_) {
@@ -406,6 +448,30 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     // image / element states. Taller toolbars simply overlay the canvas margin.
     final reserved = 128.h + ScreenUtil.bottomBarHeight;
 
+    // Covers Android's system back and the iOS back-swipe. canPop is driven by
+    // isDirty so a clean design keeps the native gesture fully interactive
+    // (predictive back, swipe-to-dismiss) instead of intercepting a pop that
+    // was never in question; only a dirty design blocks and asks.
+    return ValueListenableBuilder<bool>(
+      valueListenable: _controller.isDirty,
+      builder: (context, dirty, child) => PopScope(
+        canPop: !dirty,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop) return; // canPop was true — nothing to guard
+          final leave = await _confirmExit();
+          if (!leave || !mounted) return;
+          Navigator.of(context).pop();
+        },
+        child: child!,
+      ),
+      // Built once and reused across isDirty flips — the editor's whole subtree
+      // has nothing to say about the dirty flag, and rebuilding the canvas
+      // every time the design first becomes dirty would be pure waste.
+      child: _body(reserved),
+    );
+  }
+
+  Widget _body(double reserved) {
     return Scaffold(
       backgroundColor: AppColors.background,
       // Keep the canvas at full size when the keyboard opens for editing —
@@ -485,7 +551,7 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
             children: [
               _iconBtn(
                 Icons.arrow_back,
-                onPressed: () => Navigator.of(context).maybePop(),
+                onPressed: _onBackPressed,
               ),
               // Rebuilds on every controller change so the enabled/disabled
               // state always matches whether there's anything to undo/redo.
