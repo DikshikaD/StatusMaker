@@ -20,6 +20,12 @@ dependencies:
 
   # Image handling
   image_picker: ^1.1.2
+  # Disk-backed cache for remote images. Required, not a nicety: category
+  # backgrounds are served from Supabase Storage, and Image.network caches only
+  # in memory — every app restart would re-download and re-bill the egress.
+  cached_network_image: ^3.4.1
+  # Used to fetch the background manifest from the public storage endpoint.
+  http: ^1.6.0
 
   # Backend (auth, database, storage)
   supabase_flutter: ^2.12.4
@@ -46,11 +52,11 @@ flutter:
 
   assets:
     - assets/images/
-    - assets/categories/morning/
-    - assets/categories/love/
-    - assets/categories/festival/
-    - assets/categories/birthday/
-    - assets/categories/bhakti/
+    # assets/categories/** is deliberately NOT bundled — those 73 images are
+    # served from the public `category-backgrounds` Supabase bucket instead
+    # (see lib/features/editor/data/remote_backgrounds.dart). The files are
+    # kept in the repo as the source of truth for re-uploads. Bundling them
+    # added ~126 MB to the download.
     - assets/backgrounds/morning/
     - assets/backgrounds/love/
     - assets/backgrounds/birthday/

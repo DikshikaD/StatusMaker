@@ -376,6 +376,15 @@ class S {
     'love': ['Love', 'प्यार'],
     'birthday': ['Birthday', 'जन्मदिन'],
     'bhakti': ['Bhakti', 'भक्ति'],
+    'random': ['Random', 'विविध'],
+    'backgrounds_offline': [
+      'Backgrounds need an internet connection',
+      'बैकग्राउंड के लिए इंटरनेट ज़रूरी है'
+    ],
+    'background_download_failed': [
+      "Couldn't download that background",
+      'यह बैकग्राउंड डाउनलोड नहीं हो सका'
+    ],
 
     // editor — elements & frames
     'elements': ['Elements', 'एलिमेंट्स'],
@@ -385,6 +394,31 @@ class S {
     'frames': ['Frames', 'फ्रेम'],
     'frame': ['Frame', 'फ्रेम'],
     'width': ['Width', 'चौड़ाई'],
+    'frames_simple': ['Simple borders', 'सिंपल बॉर्डर'],
+    'frames_fancy': ['Designer frames', 'डिज़ाइनर फ्रेम'],
+    'frame_thin': ['Thin', 'पतला'],
+    'frame_thick': ['Bold', 'मोटा'],
+    'frame_double': ['Double', 'डबल'],
+    'frame_dashed': ['Dashed', 'डैश'],
+    'frame_rounded': ['Rounded', 'गोल'],
+    'frame_corners': ['Corners', 'कॉर्नर'],
+    'frame_inset': ['Inset', 'इनसेट'],
+    'frame_music': ['Now playing', 'नाउ प्लेइंग'],
+    'frame_waveform': ['Waveform', 'वेवफॉर्म'],
+    'frame_screen': ['Screen', 'स्क्रीन'],
+    'frame_story': ['Story bars', 'स्टोरी बार'],
+    'frame_polaroid': ['Polaroid', 'पोलेरॉइड'],
+    'frame_film': ['Film strip', 'फिल्म स्ट्रिप'],
+    'frame_neon': ['Neon glow', 'नियॉन ग्लो'],
+    'frame_tape': ['Tape', 'टेप'],
+    'frame_scallop': ['Scallop', 'स्कैलप'],
+    'frame_arch': ['Arch', 'आर्च'],
+    'frame_ticket': ['Ticket', 'टिकट'],
+    'frame_flourish': ['Flourish', 'फ्लोरिश'],
+    'frame_dots': ['Beads', 'बीड्स'],
+    'frame_vignette': ['Glow edge', 'ग्लो एज'],
+    'frame_sparkle': ['Sparkle', 'स्पार्कल'],
+    'frame_gradient': ['Gradient ring', 'ग्रेडिएंट रिंग'],
 
     // editor — quotes sheet / starter
     'tap_quote': ['Tap a quote to add', 'जोड़ने के लिए कोट टैप करें'],

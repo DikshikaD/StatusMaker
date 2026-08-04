@@ -299,6 +299,8 @@ class ElementObject {
 
 /// Full-status decorative borders drawn around the whole canvas by
 /// [FramePainter]. Only one is active at a time.
+/// New values are only ever APPENDED: designs are persisted by enum name, so
+/// reordering would silently repaint saved statuses with a different frame.
 enum StatusFrame {
   none,
   thin,
@@ -308,6 +310,24 @@ enum StatusFrame {
   rounded,
   corners,
   inset,
+  // Decorative "reel / Pinterest" frames — each one is its own little scene
+  // rather than a variation on a border. See FramePainter.
+  musicPlayer,
+  waveform,
+  phoneScreen,
+  storyBars,
+  polaroid,
+  filmStrip,
+  neonGlow,
+  tape,
+  scallop,
+  arch,
+  ticket,
+  flourish,
+  dots,
+  vignette,
+  sparkle,
+  gradientRing,
 }
 
 /// The background can be a solid colour, a gradient (both "built-in"), or a

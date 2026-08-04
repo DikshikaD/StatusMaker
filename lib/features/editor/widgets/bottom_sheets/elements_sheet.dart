@@ -87,7 +87,37 @@ class _ElementsSheetState extends State<ElementsSheet> {
     ElementShape.heartEyesFace,
   ];
 
-  static const List<StatusFrame> _frames = StatusFrame.values;
+  // Frames are shown in two groups: the plain borders people reach for when
+  // they just want an edge, and the decorative ones worth browsing.
+  static const List<StatusFrame> _simpleFrames = [
+    StatusFrame.none,
+    StatusFrame.thin,
+    StatusFrame.thick,
+    StatusFrame.doubleLine,
+    StatusFrame.dashed,
+    StatusFrame.rounded,
+    StatusFrame.corners,
+    StatusFrame.inset,
+  ];
+
+  static const List<StatusFrame> _fancyFrames = [
+    StatusFrame.musicPlayer,
+    StatusFrame.waveform,
+    StatusFrame.storyBars,
+    StatusFrame.phoneScreen,
+    StatusFrame.neonGlow,
+    StatusFrame.gradientRing,
+    StatusFrame.polaroid,
+    StatusFrame.filmStrip,
+    StatusFrame.ticket,
+    StatusFrame.tape,
+    StatusFrame.sparkle,
+    StatusFrame.vignette,
+    StatusFrame.scallop,
+    StatusFrame.arch,
+    StatusFrame.flourish,
+    StatusFrame.dots,
+  ];
 
   // Illustrated sticker image paths under assets/stickers/, discovered at
   // runtime (see stickerAssets()) so dropping a new image in that folder
@@ -341,61 +371,93 @@ class _ElementsSheetState extends State<ElementsSheet> {
             ),
           ],
         ),
+        SizedBox(height: 10.h),
+        _groupLabel(S.t('frames_simple')),
         SizedBox(height: 8.h),
-        _framesGrid(),
+        _framesGrid(_simpleFrames),
+        SizedBox(height: 18.h),
+        _groupLabel(S.t('frames_fancy')),
+        SizedBox(height: 8.h),
+        _framesGrid(_fancyFrames),
       ],
     );
   }
 
-  Widget _framesGrid() {
+  Widget _groupLabel(String text) => Text(
+        text,
+        style: TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 12.sp,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+
+  Widget _framesGrid(List<StatusFrame> frames) {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 3,
       mainAxisSpacing: 12.h,
       crossAxisSpacing: 12.w,
-      childAspectRatio: 0.7,
-      children: [
-        for (final f in _frames)
-          GestureDetector(
-            onTap: () {
-              widget.onSetFrame(f, _color, _frameWidth);
-              Navigator.of(context).pop();
-            },
+      childAspectRatio: 0.62,
+      children: [for (final f in frames) _frameTile(f)],
+    );
+  }
+
+  Widget _frameTile(StatusFrame f) {
+    final selected = widget.currentFrame == f;
+    // White reads as invisible on the light picker card, so previews (and only
+    // previews) fall back to the primary text colour — the canvas still gets
+    // the colour the user actually picked.
+    final previewColor =
+        _color == Colors.white ? AppColors.textPrimary : _color;
+
+    return GestureDetector(
+      onTap: () {
+        widget.onSetFrame(f, _color, _frameWidth);
+        Navigator.of(context).pop();
+      },
+      child: Column(
+        children: [
+          Expanded(
             child: Container(
+              width: double.infinity,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 color: AppColors.cardLight,
                 borderRadius: BorderRadius.circular(14.r),
                 border: Border.all(
-                  color: widget.currentFrame == f
-                      ? AppColors.accent
-                      : AppColors.border,
-                  width: widget.currentFrame == f ? 2 : 1,
+                  color: selected ? AppColors.accent : AppColors.border,
+                  width: selected ? 2 : 1,
                 ),
               ),
               child: f == StatusFrame.none
-                  ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.block, color: AppColors.textSecondary, size: 22.w),
-                        SizedBox(height: 4.h),
-                        Text(S.t('none'),
-                            style: TextStyle(
-                                color: AppColors.textSecondary, fontSize: 11.sp)),
-                      ],
+                  ? Center(
+                      child: Icon(Icons.block,
+                          color: AppColors.textSecondary, size: 22.w),
                     )
                   : CustomPaint(
                       painter: FramePainter(
                         frame: f,
-                        color: _color == Colors.white
-                            ? AppColors.textPrimary
-                            : _color,
+                        color: previewColor,
                         width: _frameWidth,
                       ),
                     ),
             ),
           ),
-      ],
+          SizedBox(height: 5.h),
+          Text(
+            S.t(frameLabelKey(f)),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: selected ? AppColors.accent : AppColors.textSecondary,
+              fontSize: 10.sp,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

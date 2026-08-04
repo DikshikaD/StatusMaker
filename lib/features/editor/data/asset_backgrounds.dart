@@ -1,10 +1,11 @@
 import 'package:flutter/services.dart';
 
-/// Lists bundled background images under `assets/categories/<folder>/` at
-/// runtime by reading the asset manifest. Because it reads the manifest (not a
-/// hard-coded list), ANY image you drop into a category folder — and register
-/// the folder in pubspec.yaml — automatically shows up in the Background sheet.
-/// No code change needed to add more backgrounds.
+/// Lists bundled image assets at runtime by reading the asset manifest, so any
+/// image dropped into a registered folder shows up without a code change.
+///
+/// Note: category backgrounds are NOT listed here any more — they moved to the
+/// `category-backgrounds` Supabase bucket (see remote_backgrounds.dart), so
+/// only the sticker helper below remains.
 
 List<String>? _cache;
 
@@ -19,19 +20,6 @@ Future<List<String>> _allAssets() async {
     _cache = const [];
   }
   return _cache!;
-}
-
-/// Sorted image asset paths inside `assets/categories/<folder>/`.
-Future<List<String>> categoryBackgroundAssets(String folder) async {
-  final all = await _allAssets();
-  final prefix = 'assets/categories/$folder/';
-  final list = all
-      .where((a) =>
-          a.startsWith(prefix) &&
-          _imageExt.any((e) => a.toLowerCase().endsWith(e)))
-      .toList()
-    ..sort();
-  return list;
 }
 
 /// Sorted image asset paths inside `assets/stickers/` — illustrated

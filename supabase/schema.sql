@@ -105,6 +105,23 @@ insert into storage.buckets (id, name, public)
   values ('thumbnails', 'thumbnails', true)
   on conflict (id) do nothing;
 
+-- App-owned category backgrounds (Bhakti, Morning, Love, …). Read-only for
+-- clients: there is no insert/update/delete policy for this bucket, so only
+-- the service_role key (admin / CI) can publish to it. Layout:
+--   manifest.json          — {version, categories:[{key, files:[...]}]}
+--   thumb/<cat>/<file>.jpg — picker grid
+--   full/<cat>/<file>.jpg  — applied to the canvas
+-- These used to be bundled in the APK (~126 MB); serving them keeps the app
+-- small and lets new backgrounds ship without an app release. Upload images
+-- with `--cache-control "max-age=31536000, immutable"` and manifest.json with
+-- `max-age=300`, so devices fetch each image once but pick up new ones fast.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  values (
+    'category-backgrounds', 'category-backgrounds', true, 5242880,
+    array['image/jpeg','image/png','image/webp','application/json']
+  )
+  on conflict (id) do nothing;
+
 -- Public read (feed images load via URL); writes limited to your own folder.
 drop policy if exists assets_read on storage.objects;
 create policy assets_read on storage.objects

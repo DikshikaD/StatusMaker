@@ -1,9 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/background_images.dart';
-import 'package:status_maker/features/editor/data/asset_backgrounds.dart';
+import 'package:status_maker/features/editor/data/remote_backgrounds.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
 /// Built-in backgrounds — solid colours and gradients. No assets needed.
@@ -28,15 +29,18 @@ const List<BackgroundState> kBackgroundPresets = [
 /// Applied by the "None" tile to clear any picked image back to a plain colour.
 const BackgroundState kNoBackground = BackgroundState(color: Color(0xFF0F172A));
 
-/// Labelled asset-image categories shown in the sheet. Each pairs an
-/// `assets/categories/<folder>/` folder with a localized label key. Files are
-/// listed at runtime, so dropping new images into a folder shows them here.
+/// Labelled image categories shown in the sheet. Each pairs a category key in
+/// the remote manifest (see [RemoteBackgrounds]) with a localized label key.
+/// The file list comes from the manifest at runtime, so backgrounds can be
+/// added by uploading them + updating manifest.json — no app release needed.
+/// A category listed here but absent from the manifest is simply skipped.
 const List<(String folder, String labelKey)> _imageCategories = [
   ('bhakti', 'bhakti'),
   ('morning', 'morning'),
   ('love', 'love'),
   ('festival', 'festival'),
   ('birthday', 'birthday'),
+  ('random', 'random'),
 ];
 
 class BackgroundSheet extends StatefulWidget {
@@ -60,21 +64,28 @@ class BackgroundSheet extends StatefulWidget {
 class _BackgroundSheetState extends State<BackgroundSheet> {
   int _tab = 0; // 0 = presets, 1 = gallery
 
-  // Asset image paths per category folder, loaded from the asset manifest.
-  final Map<String, List<String>> _catAssets = {};
+  // Category key -> filenames, from the remote manifest.
+  Map<String, List<String>> _catFiles = const {};
+  bool _loadingCats = true;
+
+  // Full-size image currently being pre-fetched after a tap, so the tile can
+  // show a spinner instead of the sheet appearing frozen.
+  String? _busyUrl;
 
   @override
   void initState() {
     super.initState();
-    _loadCategoryAssets();
+    _loadCategories();
   }
 
-  Future<void> _loadCategoryAssets() async {
-    for (final entry in _imageCategories) {
-      final paths = await categoryBackgroundAssets(entry.$1);
-      if (paths.isNotEmpty) _catAssets[entry.$1] = paths;
-    }
-    if (mounted) setState(() {});
+  Future<void> _loadCategories({bool forceRefresh = false}) async {
+    if (forceRefresh) setState(() => _loadingCats = true);
+    final files = await RemoteBackgrounds.load(forceRefresh: forceRefresh);
+    if (!mounted) return;
+    setState(() {
+      _catFiles = files;
+      _loadingCats = false;
+    });
   }
 
   @override
@@ -169,17 +180,52 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
           _noneTile(),
           for (final bg in kBackgroundPresets) _colorTile(bg),
         ]),
-        // Bundled asset image categories (Bhakti, Morning, Love, …). Listed
-        // dynamically, so any images added to the folders appear automatically.
-        for (final entry in _imageCategories)
-          if ((_catAssets[entry.$1] ?? const []).isNotEmpty) ...[
-            SizedBox(height: 20.h),
-            _sectionHeader(S.t(entry.$2)),
-            _grid([
-              for (final path in _catAssets[entry.$1]!) _assetTile(path),
-            ]),
-          ],
+        // Remote image categories (Bhakti, Morning, Love, …) — served from
+        // Supabase Storage rather than bundled, so they cost no app size.
+        if (_loadingCats)
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 28.h),
+            child: const Center(child: CircularProgressIndicator()),
+          )
+        else if (_catFiles.isEmpty)
+          _categoriesUnavailable()
+        else
+          for (final entry in _imageCategories)
+            if ((_catFiles[entry.$1] ?? const []).isNotEmpty) ...[
+              SizedBox(height: 20.h),
+              _sectionHeader(S.t(entry.$2)),
+              _grid([
+                for (final file in _catFiles[entry.$1]!)
+                  _remoteTile(entry.$1, file),
+              ]),
+            ],
       ],
+    );
+  }
+
+  /// Shown when the manifest couldn't be fetched. These backgrounds are not
+  /// bundled, so there is nothing to fall back to — offer a retry rather than
+  /// silently rendering an empty sheet.
+  Widget _categoriesUnavailable() {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 24.h),
+      child: Column(
+        children: [
+          Icon(Icons.cloud_off_rounded,
+              color: AppColors.textSecondary, size: 28.sp),
+          SizedBox(height: 8.h),
+          Text(
+            S.t('backgrounds_offline'),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13.sp),
+          ),
+          SizedBox(height: 8.h),
+          TextButton(
+            onPressed: () => _loadCategories(forceRefresh: true),
+            child: Text(S.t('retry')),
+          ),
+        ],
+      ),
     );
   }
 
@@ -232,6 +278,9 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
     );
   }
 
+  /// Tile for a still-bundled asset image — used by the category-matched
+  /// "Photo Backgrounds" strip, which reads `assets/backgrounds/` (a separate,
+  /// much smaller folder than the `assets/categories/` set that moved remote).
   Widget _assetTile(String path) {
     return GestureDetector(
       onTap: () {
@@ -257,6 +306,79 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
         ),
       ),
     );
+  }
+
+  /// One remote background tile. Shows the small `thumb/` image; the full-size
+  /// one is only ever fetched if the user actually picks it.
+  Widget _remoteTile(String category, String file) {
+    final thumb = RemoteBackgrounds.thumbUrl(category, file);
+    final full = RemoteBackgrounds.fullUrl(category, file);
+    final busy = _busyUrl == full;
+
+    return GestureDetector(
+      onTap: busy ? null : () => _pickRemote(full),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14.r),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14.r),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedNetworkImage(
+                imageUrl: thumb,
+                fit: BoxFit.cover,
+                // Decode at ~tile resolution, not full size — lighter grid.
+                memCacheWidth: 300,
+                placeholder: (_, __) => ColoredBox(color: AppColors.cardLight),
+                errorWidget: (_, __, ___) => ColoredBox(
+                  color: AppColors.cardLight,
+                  child: Icon(Icons.broken_image_outlined,
+                      color: AppColors.textSecondary, size: 18.sp),
+                ),
+              ),
+              if (busy)
+                const ColoredBox(
+                  color: Color(0x99000000),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Downloads (or reads from disk cache) the full-size background *before*
+  /// applying it. Without this the canvas would briefly show an empty
+  /// background — and an export taken in that window would bake in the gap.
+  Future<void> _pickRemote(String fullUrl) async {
+    setState(() => _busyUrl = fullUrl);
+    try {
+      await precacheImage(CachedNetworkImageProvider(fullUrl), context);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _busyUrl = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(S.t('background_download_failed'))),
+      );
+      return;
+    }
+    if (!mounted) return;
+    // Remote backgrounds ride the existing `imagePath` field, which already
+    // accepts http URLs (see canvasImage) and is left untouched by the save
+    // flow's local-photo upload step.
+    widget.onSelect(BackgroundState(imagePath: fullUrl));
+    Navigator.of(context).pop();
   }
 
   /// Clears any picked image and resets to a plain background.
