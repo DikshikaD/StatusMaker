@@ -18,6 +18,7 @@ import 'package:status_maker/features/editor/widgets/fixed_template_canvas.dart'
 import 'package:status_maker/features/editor/widgets/toolbars/locked_toolbars.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
 import 'package:status_maker/shared/utils/native_share.dart';
+import 'package:status_maker/shared/widgets/busy_overlay.dart';
 import 'package:status_maker/shared/widgets/share_target_dialog.dart';
 
 /// The LOCKED editor for a [FixedTemplate]. The design (positions, fonts,
@@ -122,9 +123,12 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     final result = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.background,
+      // Matches every other sheet in the editor: surface (not background —
+      // that read as a hole punched below the editor in dark mode) and the
+      // house 24.r corner.
+      backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
       ),
       builder: (_) => _TextEditSheet(textObject: t, hint: hint),
     );
@@ -448,6 +452,11 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
               alignment: Alignment.bottomCenter,
               child: _bottomBar(),
             ),
+            // Same input-blocking loader the free editor uses. Without it this
+            // screen stayed fully interactive during a save/export, so a second
+            // tap could fire another capture mid-flight. Outside the canvas's
+            // RepaintBoundary, so it's never baked into the exported image.
+            Positioned.fill(child: BusyOverlay(busy: _busy)),
           ],
         ),
       ),
@@ -626,7 +635,12 @@ class _TextEditSheetState extends State<_TextEditSheet> {
         left: 20.w,
         right: 20.w,
         top: 16.h,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16.h,
+        // viewInsets covers the keyboard, but with the keyboard dismissed the
+        // Done button was left sitting under the gesture home indicator — so the
+        // safe-area inset has to be added too.
+        bottom: MediaQuery.of(context).viewInsets.bottom +
+            MediaQuery.of(context).padding.bottom +
+            16.h,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

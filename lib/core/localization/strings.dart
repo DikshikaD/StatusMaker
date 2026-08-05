@@ -386,6 +386,12 @@ class S {
       'यह बैकग्राउंड डाउनलोड नहीं हो सका'
     ],
 
+    // editor — remix gate (Post disabled until the copy is actually changed)
+    'remix_change_first': [
+      'Make it yours first — change something to post it',
+      'पहले कुछ बदलाव करें — तभी पोस्ट कर सकते हैं'
+    ],
+
     // editor — elements & frames
     'elements': ['Elements', 'एलिमेंट्स'],
     'shapes': ['Shapes', 'आकार'],

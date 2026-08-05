@@ -149,7 +149,10 @@ class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
     return Container(
       padding: EdgeInsets.all(AppDimensions.paddingLarge),
       decoration: BoxDecoration(
-        color: Colors.white,
+        // Must be theme-aware: every icon and label in this bar is
+        // AppColors.textPrimary, which goes near-white in dark mode — on a
+        // hardcoded white bar they disappeared entirely.
+        color: AppColors.surface,
         borderRadius:
             BorderRadius.vertical(top: Radius.circular(AppDimensions.radiusLarge)),
         boxShadow: [
@@ -202,14 +205,22 @@ class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
               height: 56.h,
               child: ElevatedButton.icon(
                 onPressed: _openEditor,
-                icon: Icon(Icons.edit, size: 20.w),
+                // Colour set explicitly rather than inherited from
+                // foregroundColor: whether an icon picks that up depends on the
+                // Flutter version's ElevatedButton.styleFrom defaults, and this
+                // pencil has to be white on the accent fill either way.
+                icon: Icon(Icons.edit, size: 20.w, color: AppColors.onPrimary),
                 label: Text(
                   S.t('customize'),
                   style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
+                  // The brand accent, not primary. Primary is the near-black
+                  // navy, and the identical Customize button on every feed card
+                  // is accent — so the same action looked like two different
+                  // buttons depending on how you got here.
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onPrimary,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30.r),

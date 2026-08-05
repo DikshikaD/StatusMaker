@@ -271,14 +271,17 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
           ),
           ElevatedButton.icon(
             onPressed: widget.onCustomize,
-            icon: Icon(Icons.edit_outlined, size: 16.w),
+            // Explicit white on the icon — see the matching button in
+            // TemplateDetailScreen.
+            icon: Icon(Icons.edit_outlined,
+                size: 16.w, color: AppColors.onPrimary),
             label: Text(
               S.t('customize'),
               style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.accent,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.onPrimary,
               elevation: 0,
               padding: EdgeInsets.symmetric(horizontal: 18.w),
               minimumSize: Size(0, 42.h),
@@ -302,30 +305,38 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: busy ? null : onTap,
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 6.h),
-        child: Row(
+      // The visual stays compact; only the tappable box grows. A 20.w icon with
+      // 6.h padding gave a 32dp-tall target on the app's most-tapped controls
+      // (like / share / delete) — under both the 44dp and 48dp floors, and worse
+      // on a small phone where the width scale clamps to 0.82.
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: 48.h, minWidth: 44.w),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 6.h),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            busy
-                ? SizedBox(
-                    width: 18.w,
-                    height: 18.w,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: color),
-                  )
-                : Icon(icon, size: 20.w, color: color),
-            if (label != null && label.isNotEmpty) ...[
-              SizedBox(width: 5.w),
-              Text(
-                label,
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w600,
+              busy
+                  ? SizedBox(
+                      width: 18.w,
+                      height: 18.w,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: color),
+                    )
+                  : Icon(icon, size: 20.w, color: color),
+              if (label != null && label.isNotEmpty) ...[
+                SizedBox(width: 5.w),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

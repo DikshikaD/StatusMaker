@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/template_motif.dart';
@@ -160,6 +162,31 @@ ElementObject _elementFromJson(Map j) => ElementObject(
     );
 
 // ---------------------------------------------------------------------------
+// Content signature
+// ---------------------------------------------------------------------------
+/// Keys stripped before fingerprinting a design — see
+/// [StatusDesign.contentSignature] for why each one is noise.
+const Set<String> _signatureIgnoredKeys = {'z', 'canvasW', 'canvasH'};
+
+Object? _normalizeForSignature(Object? v) {
+  if (v is Map) {
+    return {
+      for (final e in v.entries)
+        if (!_signatureIgnoredKeys.contains(e.key))
+          e.key: _normalizeForSignature(e.value),
+    };
+  }
+  if (v is List) return v.map(_normalizeForSignature).toList();
+  if (v is double) {
+    final rounded = (v * 10).roundToDouble() / 10;
+    // -0.0 and 0.0 are equal but encode differently, which would make an
+    // untouched design look edited.
+    return rounded == 0 ? 0.0 : rounded;
+  }
+  return v;
+}
+
+// ---------------------------------------------------------------------------
 // StatusDesign — the full editable composition, ready for a `jsonb` column.
 // ---------------------------------------------------------------------------
 class StatusDesign {
@@ -249,6 +276,22 @@ class StatusDesign {
             : Size(_d(j['canvasW'], kDesignDefaultCanvasSize.width),
                 _d(j['canvasH'], kDesignDefaultCanvasSize.height)),
       );
+
+  /// A stable fingerprint of everything a *viewer* of the status would see.
+  /// Two designs with the same signature look identical. Used to answer "has
+  /// the user actually changed anything?" — see the remix gate in
+  /// StatusPersonalizerScreen.
+  ///
+  /// Deliberately not just `jsonEncode(toJson())`, because three parts of the
+  /// JSON move without the design ever looking different:
+  ///  * `z` — [EditorController] bumps an object's zIndex when the user merely
+  ///    *taps* it (see _bringToFront), and tapping isn't customizing;
+  ///  * `canvasW`/`canvasH` — the canvas is however big this device makes it,
+  ///    so a design opened on a different-sized phone would never match;
+  ///  * raw doubles — a drag that ends a hair from where it started, or the
+  ///    float noise from scaleDesignToCanvas, shouldn't read as an edit, so
+  ///    every number is rounded to a tenth of a pixel first.
+  String get contentSignature => jsonEncode(_normalizeForSignature(toJson()));
 
   /// Load this design into an editor (used when opening or remixing a status).
   void applyTo(EditorController c) => c.loadDesign(

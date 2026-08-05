@@ -79,6 +79,12 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   /// updates the same creation instead of making duplicates.
   String? _statusId;
 
+  /// Fingerprint of the design as it was handed to us, set **only** when this
+  /// editor was opened on someone else's public status (i.e. [widget.remixOf]
+  /// is set — see [_isUntouchedRemix]). Null for a blank canvas, a ready-made
+  /// template, or the user reopening their own creation; those all post freely.
+  String? _remixBaseline;
+
   @override
   void initState() {
     super.initState();
@@ -101,6 +107,12 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         // Undo should only ever revert the user's own edits from here on,
         // never back into "before the saved design was loaded".
         _controller.clearHistory();
+        if (widget.remixOf != null) {
+          // Baseline is taken *after* scaling + loading, so it describes this
+          // canvas rather than the original author's device — otherwise every
+          // remix on a differently-sized phone would look pre-edited.
+          setState(() => _remixBaseline = _currentSignature());
+        }
         return;
       }
       if (t != null) {
@@ -165,6 +177,27 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
     if (box != null && box.hasSize) return box.size;
     return widget.designCanvasSize ?? kFixedCanvasSize;
+  }
+
+  String _currentSignature() =>
+      StatusDesign.fromController(_controller, canvasSize: _measureCanvas())
+          .contentSignature;
+
+  /// True while this is a byte-for-byte copy of someone else's public status.
+  /// Posting it would republish their work under this user's name and ping them
+  /// about their own design, so Post stays disabled until something changes.
+  ///
+  /// Recomputed rather than latched on the first edit, so undoing all the way
+  /// back to the original blocks Post again. Cheap enough to run per rebuild:
+  /// it stops comparing entirely once [_remixBaseline] is null, which is every
+  /// case except an untouched remix. Note this deliberately does not gate Save
+  /// or Share — keeping a private copy of a status you liked is fine; it's only
+  /// republishing it unchanged that isn't.
+  bool get _isUntouchedRemix =>
+      _remixBaseline != null && _currentSignature() == _remixBaseline;
+
+  void _explainRemixGate() {
+    if (mounted) AppSnackBar.info(context, S.t('remix_change_first'));
   }
 
   // ---- actions --------------------------------------------------------------
@@ -366,6 +399,12 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   /// feed it was posted to.
   Future<void> _onPost() async {
     if (_busy) return;
+    // Belt and braces: the pill is already disabled in this state, but nothing
+    // else may publish an unchanged copy of someone else's status either.
+    if (_isUntouchedRemix) {
+      _explainRemixGate();
+      return;
+    }
     setState(() => _busy = true);
     try {
       final bytes = await _capture();
@@ -581,12 +620,24 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
                 onTap: _busy ? null : _onSave,
               ),
               SizedBox(width: 6.w),
-              _pill(
-                label: S.t('post'),
-                icon: Icons.public,
-                filled: false,
-                showLabel: showLabels,
-                onTap: _busy ? null : _onPost,
+              // Post is the one action that can be blocked by the design's
+              // *content* (an untouched remix), so unlike Save and Share it has
+              // to re-evaluate on every controller change.
+              AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) {
+                  final blocked = _isUntouchedRemix;
+                  return _pill(
+                    label: S.t('post'),
+                    icon: Icons.public,
+                    filled: false,
+                    showLabel: showLabels,
+                    disabled: blocked,
+                    // A dead pill just leaves the user tapping at nothing, so a
+                    // blocked Post still answers — it explains itself instead.
+                    onTap: _busy ? null : (blocked ? _explainRemixGate : _onPost),
+                  );
+                },
               ),
               SizedBox(width: 6.w),
               _pill(
@@ -630,8 +681,12 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     required bool filled,
     required VoidCallback? onTap,
     bool showLabel = true,
+
+    /// Dims the pill *without* swallowing the tap, so an unavailable action can
+    /// still say why it's unavailable instead of silently ignoring the user.
+    bool disabled = false,
   }) {
-    final disabled = onTap == null;
+    final dim = disabled || onTap == null;
     final content = Container(
       padding: EdgeInsets.symmetric(
           horizontal: showLabel ? 14.w : 10.w, vertical: 9.h),
@@ -659,7 +714,7 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       ),
     );
     return Opacity(
-      opacity: disabled ? 0.5 : 1.0,
+      opacity: dim ? 0.5 : 1.0,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,

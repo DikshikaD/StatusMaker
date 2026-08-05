@@ -60,7 +60,9 @@ class CreateScreen extends StatelessWidget {
       padding: EdgeInsets.all(AppDimensions.paddingLarge),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AppColors.accent, Color(0xFFF3B49E)],
+          // The brand token, not a one-off hex — the old #F3B49E was lighter
+          // than accentLight, so this banner read as a washed-out second brand.
+          colors: AppColors.accentGradient,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -116,18 +118,24 @@ class CreateScreen extends StatelessWidget {
   }
 
   Widget _buildThemeGrid(BuildContext context) {
+    // Each theme carries a base hue, not a finished fill. The disc below tints
+    // it at low alpha so it composites over whatever the scaffold background
+    // is: a pale wash in light mode (what the old `.shade50` fills gave) and a
+    // subtle coloured glow in dark mode. The fills used to be hardcoded
+    // `.shade50` pastels, which turned into ten near-white discs glaring on the
+    // dark background — the brightest thing on the screen.
     final themes = [
       // Traditional themes — loved by families & elders (Hindi content).
-      {'icon': Icons.self_improvement, 'name': 'Devotional', 'color': Colors.orange.shade50},
-      {'icon': Icons.wb_twilight, 'name': 'Suprabhat', 'color': Colors.amber.shade50},
-      {'icon': Icons.nightlight_round, 'name': 'Good Night', 'color': Colors.indigo.shade50},
-      {'icon': Icons.format_quote, 'name': 'Suvichar', 'color': Colors.teal.shade50},
-      {'icon': Icons.cake_outlined, 'name': 'Birthday', 'color': Colors.pink.shade50},
-      {'icon': Icons.celebration_outlined, 'name': 'Festival', 'color': Colors.orange.shade50},
-      {'icon': Icons.bolt_outlined, 'name': 'Motivation', 'color': Colors.yellow.shade50},
-      {'icon': Icons.favorite_outline, 'name': 'Love', 'color': Colors.red.shade50},
-      {'icon': Icons.wb_sunny_outlined, 'name': 'Morning', 'color': Colors.blue.shade50},
-      {'icon': Icons.business_center_outlined, 'name': 'Business', 'color': Colors.grey.shade100},
+      {'icon': Icons.self_improvement, 'name': 'Devotional', 'tint': Colors.orange},
+      {'icon': Icons.wb_twilight, 'name': 'Suprabhat', 'tint': Colors.amber},
+      {'icon': Icons.nightlight_round, 'name': 'Good Night', 'tint': Colors.indigo},
+      {'icon': Icons.format_quote, 'name': 'Suvichar', 'tint': Colors.teal},
+      {'icon': Icons.cake_outlined, 'name': 'Birthday', 'tint': Colors.pink},
+      {'icon': Icons.celebration_outlined, 'name': 'Festival', 'tint': Colors.deepOrange},
+      {'icon': Icons.bolt_outlined, 'name': 'Motivation', 'tint': Colors.amber},
+      {'icon': Icons.favorite_outline, 'name': 'Love', 'tint': Colors.red},
+      {'icon': Icons.wb_sunny_outlined, 'name': 'Morning', 'tint': Colors.blue},
+      {'icon': Icons.business_center_outlined, 'name': 'Business', 'tint': Colors.blueGrey},
     ];
 
     return GridView.builder(
@@ -162,15 +170,20 @@ class CreateScreen extends StatelessWidget {
           child: Column(
             children: [
               Container(
-                height: 70.h,
+                // Both axes use .w: .h and .w scale by different factors, so
+                // 70.h × 70.w is an ellipse-bound box that leaves BoxShape.circle
+                // drawing a smaller circle with dead space around it.
+                height: 70.w,
                 width: 70.w,
                 decoration: BoxDecoration(
-                  color: theme['color'] as Color,
+                  color: (theme['tint'] as Color).withValues(alpha: 0.16),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   theme['icon'] as IconData,
-                  color: AppColors.primary,
+                  // textPrimary, not primary: the brand navy was unreadable
+                  // once the disc stopped being a near-white pastel.
+                  color: AppColors.textPrimary,
                   size: 28.w,
                 ),
               ),

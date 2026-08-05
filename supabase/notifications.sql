@@ -263,6 +263,20 @@ begin
     return new;
   end if;
 
+  -- Only a *published* remix is news. Keeping a private copy of someone's
+  -- status is between that user and their own gallery, so a Save (is_public
+  -- false) must stay silent — the creator hears about it when, and only when,
+  -- the remix goes public.
+  if not new.is_public then
+    return new;
+  end if;
+
+  -- ...and only on the way in or the way up. Without this, every later
+  -- edit-and-resave of an already-public remix would notify again.
+  if tg_op = 'UPDATE' and old.is_public then
+    return new;
+  end if;
+
   select user_id into owner_id from public.statuses where id = new.remix_of;
 
   -- Remixing your own template notifies nobody.
@@ -284,6 +298,16 @@ end $$;
 -- break the save.
 drop trigger if exists notify_remix_ins on public.statuses;
 create trigger notify_remix_ins after insert on public.statuses
+  for each row execute function public.notify_on_remix();
+
+-- Post straight from the editor inserts an already-public row (the INSERT
+-- trigger above catches that), but Save-then-Post inserts privately first and
+-- flips the flag later — so the private -> public transition needs its own
+-- trigger or that notification is lost. notify_on_remix() is written to be
+-- safe under both, and `after update of is_public` keeps it off the hot path
+-- of ordinary design re-saves.
+drop trigger if exists notify_remix_pub on public.statuses;
+create trigger notify_remix_pub after update of is_public on public.statuses
   for each row execute function public.notify_on_remix();
 
 -- ---------------------------------------------------------------------------

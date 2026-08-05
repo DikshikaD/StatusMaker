@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/fixed_templates.dart';
@@ -199,14 +200,16 @@ class FixedTemplateCanvas extends StatelessWidget {
       content = Container(
         width: size.width,
         height: size.height,
-        color: Colors.black.withValues(alpha: 0.18),
+        // See EditableImageWidget's placeholder — kept in step with it.
+        color: Colors.black.withValues(alpha: 0.30),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(Icons.add_a_photo_outlined, color: Colors.white, size: 34),
-            SizedBox(height: 8),
-            Text('Add photo',
-                style: TextStyle(color: Colors.white, fontSize: 13)),
+          children: [
+            const Icon(Icons.add_a_photo_outlined,
+                color: Colors.white, size: 34),
+            const SizedBox(height: 8),
+            Text(S.t('add_photo'),
+                style: const TextStyle(color: Colors.white, fontSize: 13)),
           ],
         ),
       );

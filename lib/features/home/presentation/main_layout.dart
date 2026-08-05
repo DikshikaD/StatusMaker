@@ -142,6 +142,10 @@ class _MainLayoutState extends State<MainLayout> {
             offset: Offset(0, -4.h),
           ),
         ],
+        // A black shadow does nothing over the dark background, and surface
+        // (#1E293B) barely differs from it — so in dark mode the bar merged
+        // into the page. A hairline gives it back its edge.
+        border: Border(top: BorderSide(color: AppColors.border)),
       ),
       child: SafeArea(
         top: false,

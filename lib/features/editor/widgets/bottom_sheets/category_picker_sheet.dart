@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
+import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
@@ -9,6 +10,16 @@ class _Cat {
   final String name; // '' means General / no specific category
   final Color color;
   const _Cat(this.icon, this.name, this.color);
+
+  /// Disc fill for the current theme. The stored colours are pale pastels
+  /// designed for a white sheet — painted as-is they became eleven near-white
+  /// discs glaring off the dark surface. In dark mode the same hue is kept but
+  /// composited at low alpha so it reads as a subtle tint instead. (Branching on
+  /// the theme rather than always tinting is deliberate: these pastels are too
+  /// pale to survive an alpha pass over a light surface — the discs would
+  /// disappear in light mode.)
+  Color get fill =>
+      ThemeController.isDark ? color.withValues(alpha: 0.18) : color;
 }
 
 /// Shown when the user taps the floating Create button. Lets them pick a
@@ -109,7 +120,7 @@ class CategoryPickerSheet extends StatelessWidget {
             height: 64.h,
             width: 64.w,
             decoration: BoxDecoration(
-              color: c.color,
+              color: c.fill,
               shape: BoxShape.circle,
               border: Border.all(color: AppColors.border),
             ),

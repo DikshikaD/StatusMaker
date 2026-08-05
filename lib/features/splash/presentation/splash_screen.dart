@@ -98,7 +98,10 @@ class _SplashScreenState extends State<SplashScreen>
                     style: TextStyle(
                       fontSize: 28.sp,
                       fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
+                      // Not AppColors.primary: that's the brand navy, and this
+                      // sits on AppColors.background, which *is* navy in dark
+                      // mode — the app name was invisible there.
+                      color: AppColors.textPrimary,
                       letterSpacing: 0.5,
                     ),
                   ),

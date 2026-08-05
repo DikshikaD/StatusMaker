@@ -135,6 +135,30 @@ class _ElementsSheetState extends State<ElementsSheet> {
     if (mounted) setState(() => _imageStickers = paths);
   }
 
+  /// Colour to paint shape/frame *previews* with. The tiles sit on
+  /// [AppColors.cardLight], which is near-white in light mode and near-black in
+  /// dark mode, so a swatch close to the tile renders as an invisible preview —
+  /// white was already handled, but black was invisible on the dark card the
+  /// same way. Falls back to textPrimary whenever contrast against the tile is
+  /// too low. The canvas always receives the real picked colour.
+  ///
+  /// The 1.5 threshold is deliberately tight — substituting also *misrepresents*
+  /// the chosen colour, so it's reserved for swatches that are genuinely
+  /// invisible against the tile (measured: white 1.18 and yellow 1.19 on the
+  /// light card, black 1.44 on the dark one). Merely weak ones like cyan at 1.75
+  /// are left showing their real colour.
+  Color get _previewColor => _contrastRatio(_color, AppColors.cardLight) < 1.5
+      ? AppColors.textPrimary
+      : _color;
+
+  static double _contrastRatio(Color a, Color b) {
+    final la = a.computeLuminance();
+    final lb = b.computeLuminance();
+    final hi = la > lb ? la : lb;
+    final lo = la > lb ? lb : la;
+    return (hi + 0.05) / (lo + 0.05);
+  }
+
   @override
   Widget build(BuildContext context) {
     final maxH = MediaQuery.of(context).size.height * 0.78;
@@ -270,12 +294,7 @@ class _ElementsSheetState extends State<ElementsSheet> {
                 border: Border.all(color: AppColors.border),
               ),
               child: CustomPaint(
-                painter: ElementPainter(
-                  shape: s,
-                  color: _color == Colors.white
-                      ? AppColors.textPrimary
-                      : _color,
-                ),
+                painter: ElementPainter(shape: s, color: _previewColor),
               ),
             ),
           ),
@@ -406,11 +425,6 @@ class _ElementsSheetState extends State<ElementsSheet> {
 
   Widget _frameTile(StatusFrame f) {
     final selected = widget.currentFrame == f;
-    // White reads as invisible on the light picker card, so previews (and only
-    // previews) fall back to the primary text colour — the canvas still gets
-    // the colour the user actually picked.
-    final previewColor =
-        _color == Colors.white ? AppColors.textPrimary : _color;
 
     return GestureDetector(
       onTap: () {
@@ -439,7 +453,7 @@ class _ElementsSheetState extends State<ElementsSheet> {
                   : CustomPaint(
                       painter: FramePainter(
                         frame: f,
-                        color: previewColor,
+                        color: _previewColor,
                         width: _frameWidth,
                       ),
                     ),

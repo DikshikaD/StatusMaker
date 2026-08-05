@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/utils/canvas_image.dart';
 import 'package:status_maker/features/editor/utils/image_shape_utils.dart';
@@ -38,14 +39,18 @@ class EditableImageWidget extends StatelessWidget {
         ? Container(
             width: size.width,
             height: size.height,
-            color: Colors.black.withValues(alpha: 0.18),
+            // 0.18 was too weak to carry white text over a light or pastel
+            // background template — and this placeholder is what gets exported
+            // if the slot is never filled.
+            color: Colors.black.withValues(alpha: 0.30),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: const [
-                Icon(Icons.add_a_photo_outlined, color: Colors.white, size: 34),
-                SizedBox(height: 8),
-                Text('Add photo',
-                    style: TextStyle(color: Colors.white, fontSize: 13)),
+              children: [
+                const Icon(Icons.add_a_photo_outlined,
+                    color: Colors.white, size: 34),
+                const SizedBox(height: 8),
+                Text(S.t('add_photo'),
+                    style: const TextStyle(color: Colors.white, fontSize: 13)),
               ],
             ),
           )

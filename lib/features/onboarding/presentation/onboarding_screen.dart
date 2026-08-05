@@ -338,9 +338,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             width: 190.w,
             height: 300.h,
             decoration: BoxDecoration(
-              color: Colors.white,
+              // This illustration sits on AppColors.background (the onboarding
+              // scaffold is not a full-bleed gradient), so a hardcoded white
+              // body was a glaring slab in dark mode.
+              color: AppColors.surface,
               borderRadius: BorderRadius.circular(28.r),
-              border: Border.all(color: AppColors.border, width: 6),
+              border: Border.all(color: AppColors.border, width: 6.w),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.10),
@@ -476,7 +479,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 8.h),
       decoration: BoxDecoration(
-        color: Colors.white,
+        // Theme-aware, because the label below is AppColors.textPrimary — on a
+        // hardcoded white fill the text was white-on-white in dark mode.
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(20.r),
         boxShadow: [
           BoxShadow(

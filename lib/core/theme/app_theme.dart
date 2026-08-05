@@ -41,10 +41,18 @@ class AppTheme {
         surface: surface,
       ),
       scaffoldBackgroundColor: background,
-      textTheme: AppTypography.textTheme,
+      textTheme: AppTypography.textTheme(
+        textPrimary: textPrimary,
+        textSecondary: textSecondary,
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: background,
         elevation: 0,
+        // Without this, Material 3 tints the app bar toward `primary` as content
+        // scrolls under it, so the deliberate flat/flush look above quietly
+        // broke on every scrolling screen.
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
         centerTitle: true,
         iconTheme: IconThemeData(color: textPrimary),
         titleTextStyle: TextStyle(
@@ -74,9 +82,13 @@ class AppTheme {
           padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
         ),
       ),
+      // The shipped bottom bar is hand-rolled in MainLayout, so this only
+      // applies to a plain BottomNavigationBar. It said selected == primary
+      // while the real bar uses accent, which made the theme actively
+      // misleading about the app's own selection convention.
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: surface,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: AppColors.accent,
         unselectedItemColor: textSecondary,
         type: BottomNavigationBarType.fixed,
         elevation: 8,
