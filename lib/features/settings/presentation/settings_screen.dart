@@ -1,10 +1,11 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
-import 'package:status_maker/features/dev/presentation/seed_feed_screen.dart';
 import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/core/utils/responsive.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,6 +15,30 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  /// Must match `applicationId` in android/app/build.gradle.kts.
+  static const _packageId = 'com.statusmaker.appbedev.status_maker';
+  static const _storeUrl =
+      'https://play.google.com/store/apps/details?id=$_packageId';
+
+  /// Opens the Play Store listing — in the store app when it's installed
+  /// (market://), otherwise the web listing.
+  Future<void> _rateUs() async {
+    for (final uri in [
+      Uri.parse('market://details?id=$_packageId'),
+      Uri.parse(_storeUrl),
+    ]) {
+      try {
+        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+      } catch (_) {
+        // market:// has no handler on this device/platform — try the web URL.
+      }
+    }
+    if (mounted) AppSnackBar.error(context, S.t('something_wrong'));
+  }
+
+  /// Opens the system share sheet with an invite message + store link.
+  void _shareApp() => Share.share('${S.t('share_app_msg')}\n$_storeUrl');
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -49,35 +74,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SizedBox(height: 32.h),
           _sectionTitle(S.t('about')),
           SizedBox(height: 12.h),
-          _row(Icons.star_outline, S.t('rate_us')),
-          _row(Icons.ios_share, S.t('share_app')),
-          _row(Icons.info_outline, '${S.t('version')}  1.0.0', tappable: false),
-
-          // Debug-only. Stripped from release builds by the const kDebugMode
-          // check, and SeedFeedScreen.open() refuses to push there anyway.
-          // Deliberately unlocalized — it never ships.
-          if (kDebugMode) ...[
-            SizedBox(height: 32.h),
-            _sectionTitle('Developer'),
-            SizedBox(height: 12.h),
-            Padding(
-              padding: EdgeInsets.only(bottom: 4.h),
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(Icons.cloud_upload_outlined,
-                    color: AppColors.textSecondary),
-                title: Text('Seed public feed',
-                    style: TextStyle(
-                        fontSize: 15.sp, color: AppColors.textPrimary)),
-                subtitle: Text('Publish bundled templates to Home',
-                    style: TextStyle(
-                        fontSize: 12.sp, color: AppColors.textSecondary)),
-                trailing:
-                    Icon(Icons.chevron_right, color: AppColors.textSecondary),
-                onTap: () => SeedFeedScreen.open(context),
-              ),
-            ),
-          ],
+          _row(Icons.star_outline, S.t('rate_us'), onTap: _rateUs),
+          _row(Icons.ios_share, S.t('share_app'), onTap: _shareApp),
+          _row(Icons.info_outline, '${S.t('version')}  1.0.0'),
         ],
       ),
     );
@@ -171,7 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _row(IconData icon, String label, {bool tappable = true}) {
+  Widget _row(IconData icon, String label, {VoidCallback? onTap}) {
     return Padding(
       padding: EdgeInsets.only(bottom: 4.h),
       child: ListTile(
@@ -179,18 +178,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         leading: Icon(icon, color: AppColors.textSecondary),
         title: Text(label,
             style: TextStyle(fontSize: 15.sp, color: AppColors.textPrimary)),
-        trailing: tappable
+        trailing: onTap != null
             ? Icon(Icons.chevron_right, color: AppColors.textSecondary)
             : null,
-        onTap: tappable
-            ? () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content: Text(label),
-                      duration: const Duration(seconds: 2)),
-                );
-              }
-            : null,
+        onTap: onTap,
       ),
     );
   }

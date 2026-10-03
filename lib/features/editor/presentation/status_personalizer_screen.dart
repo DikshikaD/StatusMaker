@@ -41,6 +41,12 @@ class StatusPersonalizerScreen extends StatefulWidget {
   /// original — stored as `remix_of` on the new saved row.
   final String? remixOf;
 
+  /// When reopening the user's OWN saved creation to edit, its row id. Saves
+  /// then update that row in place instead of inserting a duplicate. Mutually
+  /// exclusive with [remixOf] — a status is either yours (edit) or someone
+  /// else's (remix), never both.
+  final String? existingId;
+
   /// When true, the quote suggestions sheet is opened automatically once the
   /// editor has loaded — used by the "Create" flow after a category is chosen.
   final bool showQuotesOnStart;
@@ -58,9 +64,11 @@ class StatusPersonalizerScreen extends StatefulWidget {
     this.template,
     this.initialDesign,
     this.remixOf,
+    this.existingId,
     this.showQuotesOnStart = false,
     this.designCanvasSize,
-  });
+  }) : assert(remixOf == null || existingId == null,
+            'A status is either your own (existingId) or a remix (remixOf)');
 
   @override
   State<StatusPersonalizerScreen> createState() =>
@@ -88,6 +96,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   @override
   void initState() {
     super.initState();
+    // Editing an own creation: seed the row id so the first Save/Post already
+    // updates that row instead of inserting a duplicate.
+    _statusId = widget.existingId;
     _controller = EditorController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final design = widget.initialDesign;

@@ -83,7 +83,11 @@ class StatusRepository {
       'category': (category == null || category.isEmpty) ? null : category,
       'design': designJson,
       'thumb_url': thumbUrl,
-      'is_public': makePublic,
+      // Post always publishes; a fresh insert takes makePublic as-is. But a
+      // plain Save on an existing row must NOT touch is_public — otherwise
+      // editing an already-posted status and tapping Save would silently
+      // unpublish it from the feed.
+      if (makePublic || existingId == null) 'is_public': makePublic,
       if (remixOf != null) 'remix_of': remixOf,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };

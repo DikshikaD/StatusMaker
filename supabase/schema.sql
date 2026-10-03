@@ -9,7 +9,11 @@
 -- ---------------------------------------------------------------------------
 create table if not exists public.statuses (
   id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references auth.users(id) on delete cascade,
+  -- Nullable + "set null" on purpose: a status must OUTLIVE its author. If the
+  -- auth user is ever removed (anonymous-user cleanup, GDPR delete, manual
+  -- purge), the content stays and simply becomes unowned rather than being
+  -- cascade-deleted out of the public feed. See migrations/0001_keep_statuses.sql.
+  user_id      uuid references auth.users(id) on delete set null,
   title        text,
   category     text,
   design       jsonb not null,          -- full editable composition (bg/text/fonts/images/elements)

@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/supabase/supabase_service.dart';
+import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/shared/widgets/saved_status_card.dart';
 import 'package:status_maker/shared/widgets/app_shimmer.dart';
+import 'package:status_maker/shared/widgets/confirm_dialog.dart';
 import 'package:status_maker/shared/widgets/empty_state.dart';
 import 'package:status_maker/features/explore/presentation/explore_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
@@ -307,14 +310,22 @@ class _HomeScreenState extends State<HomeScreen> {
         itemCount: _statuses.length,
         separatorBuilder: (_, __) =>
             SizedBox(height: AppDimensions.paddingLarge),
-        itemBuilder: (context, i) => RepaintBoundary(
-          child: SavedStatusCard(
-            status: _statuses[i],
-            tag: tag,
-            onOpen: () => _openDetail(context, _statuses[i]),
-            onCustomize: () => _openEditor(context, _statuses[i]),
-          ),
-        ),
+        itemBuilder: (context, i) {
+          final status = _statuses[i];
+          // Only the owner can delete their post from the feed; the card also
+          // swaps Customize → Edit and shows a "Your status" badge for these.
+          final isOwn = status.userId != null &&
+              status.userId == SupabaseService.userId;
+          return RepaintBoundary(
+            child: SavedStatusCard(
+              status: status,
+              tag: tag,
+              onOpen: () => _openDetail(context, status),
+              onCustomize: () => _openEditor(context, status),
+              onDelete: isOwn ? () => _confirmAndDelete(status) : null,
+            ),
+          );
+        },
       ),
     );
   }
@@ -329,7 +340,33 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Same confirm → optimistic-remove → restore-on-failure flow as the
+  /// "My Creations" tab (see FavoritesScreen), applied to the public feed.
+  Future<void> _confirmAndDelete(SavedStatus status) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: S.t('delete_status_title'),
+      message: S.t('delete_status_msg'),
+    );
+    if (confirmed != true) return;
+
+    final previous = List<SavedStatus>.from(_statuses);
+    setState(() => _statuses.removeWhere((s) => s.id == status.id));
+    try {
+      await _repo.delete(status.id);
+      if (mounted) AppSnackBar.success(context, S.t('deleted_ok'));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _statuses = previous); // restore on failure
+      AppSnackBar.error(context, S.t('something_wrong'));
+    }
+  }
+
   void _openEditor(BuildContext context, SavedStatus status) {
+    // Editing your own post updates it in place; opening someone else's
+    // creates a new status linked back to the original as a remix.
+    final isOwn =
+        status.userId != null && status.userId == SupabaseService.userId;
     Navigator.push(
       context,
       FadeSlidePageRoute(
@@ -337,9 +374,12 @@ class _HomeScreenState extends State<HomeScreen> {
           templateName: status.title ?? 'Status',
           category: status.category ?? '',
           initialDesign: status.toDesign(),
-          remixOf: status.id,
+          existingId: isOwn ? status.id : null,
+          remixOf: isOwn ? null : status.id,
         ),
       ),
-    );
+    ).then((_) {
+      if (mounted && !_loading) _load(); // reflect in-place edits in the feed
+    });
   }
 }

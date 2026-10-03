@@ -4,6 +4,7 @@ import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 import 'package:status_maker/core/utils/app_snackbar.dart';
+import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/shared/widgets/app_shimmer.dart';
 import 'package:status_maker/shared/utils/share_image.dart';
 import 'package:status_maker/shared/widgets/share_target_dialog.dart';
@@ -49,6 +50,13 @@ class SavedStatusCard extends StatefulWidget {
 class _SavedStatusCardState extends State<SavedStatusCard> {
   bool _pressed = false;
   bool _sharing = false;
+
+  /// Whether this status was posted by the signed-in user. Own creations get a
+  /// "Your status" badge and an Edit CTA instead of Customize (you edit your
+  /// own work; you customize someone else's).
+  bool get _isOwn =>
+      widget.status.userId != null &&
+      widget.status.userId == SupabaseService.userId;
 
   /// Like state is NOT held here. It used to be a local bool, which is why the
   /// heart reset and the count reverted as soon as the card rebuilt — the tap
@@ -191,6 +199,38 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
                       ),
                     ),
                   ),
+                // "Your status" badge — top-right, opposite the category pill,
+                // so the owner can spot their own posts in the shared feed.
+                if (_isOwn)
+                  Positioned(
+                    top: 14.h,
+                    right: 14.w,
+                    child: Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 10.w, vertical: 6.h),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                            colors: AppColors.accentGradient),
+                        borderRadius: BorderRadius.circular(20.r),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.person,
+                              size: 12.w, color: Colors.white),
+                          SizedBox(width: 4.w),
+                          Text(
+                            S.t('tag_yours'),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11.sp,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -275,8 +315,10 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
             // TemplateDetailScreen.
             icon: Icon(Icons.edit_outlined,
                 size: 16.w, color: AppColors.onPrimary),
+            // Own creations say Edit — you edit your own status, you
+            // customize someone else's template.
             label: Text(
-              S.t('customize'),
+              S.t(_isOwn ? 'edit' : 'customize'),
               style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w700),
             ),
             style: ElevatedButton.styleFrom(

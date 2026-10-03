@@ -4,6 +4,7 @@ import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/shared/widgets/empty_state.dart';
 import 'package:status_maker/shared/widgets/app_shimmer.dart';
+import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/shared/widgets/saved_status_card.dart';
 import 'package:status_maker/shared/widgets/confirm_dialog.dart';
@@ -176,6 +177,10 @@ class _LikedTabState extends State<_LikedTab>
   }
 
   void _openEditor(SavedStatus status) {
+    // A liked status can be the user's own — editing it must update the row,
+    // while someone else's opens as a remix.
+    final isOwn =
+        status.userId != null && status.userId == SupabaseService.userId;
     Navigator.push(
       context,
       FadeSlidePageRoute(
@@ -183,7 +188,8 @@ class _LikedTabState extends State<_LikedTab>
           templateName: status.title ?? 'Status',
           category: status.category ?? '',
           initialDesign: status.toDesign(),
-          remixOf: status.id,
+          existingId: isOwn ? status.id : null,
+          remixOf: isOwn ? null : status.id,
         ),
       ),
     ).then((_) => _load());
@@ -346,6 +352,9 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
           templateName: status.title ?? 'Status',
           category: status.category ?? '',
           initialDesign: status.toDesign(),
+          // Everything in My Creations is the user's own — saves from this
+          // editor must update the row, not duplicate it.
+          existingId: status.id,
         ),
       ),
     ).then((_) => _load()); // refresh in case they saved changes

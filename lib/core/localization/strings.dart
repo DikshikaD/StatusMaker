@@ -130,6 +130,10 @@ class S {
     'version': ['Version', 'वर्शन'],
     'rate_us': ['Rate us', 'हमें रेट करें'],
     'share_app': ['Share app', 'ऐप शेयर करें'],
+    'share_app_msg': [
+      'Create beautiful statuses with Status Maker — get the app:',
+      'स्टेटस मेकर के साथ सुंदर स्टेटस बनाएँ — ऐप डाउनलोड करें:'
+    ],
 
     // home
     'youre_caught_up': ['You\'re all caught up!', 'आप पूरी तरह अपडेटेड हैं!'],
@@ -277,6 +281,8 @@ class S {
     'retry': ['Retry', 'फिर से करें'],
     'tag_public': ['Public', 'सार्वजनिक'],
     'tag_private': ['Private', 'निजी'],
+    'tag_yours': ['Your status', 'आपका स्टेटस'],
+    'edit': ['Edit', 'एडिट करें'],
     'something_wrong': ['Something went wrong', 'कुछ गड़बड़ हो गई'],
     'try_again_msg': [
       'Please try again in a moment.',

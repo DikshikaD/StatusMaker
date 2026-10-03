@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/core/utils/responsive.dart';
@@ -63,6 +64,10 @@ class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
 
   void _openEditor() {
     final status = widget.status;
+    // Editing your own post updates it in place; opening someone else's
+    // creates a new status linked back to the original as a remix.
+    final isOwn =
+        status.userId != null && status.userId == SupabaseService.userId;
     Navigator.push(
       context,
       FadeSlidePageRoute(
@@ -70,7 +75,8 @@ class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
           templateName: status.title ?? 'Status',
           category: status.category ?? '',
           initialDesign: status.toDesign(),
-          remixOf: status.id,
+          existingId: isOwn ? status.id : null,
+          remixOf: isOwn ? null : status.id,
         ),
       ),
     );
