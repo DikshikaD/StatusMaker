@@ -4,7 +4,10 @@ import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/utils/app_snackbar.dart';
+import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/core/utils/responsive.dart';
+import 'package:status_maker/features/notifications/data/app_notification.dart';
+import 'package:status_maker/features/notifications/presentation/notifications_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -16,7 +19,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   /// Must match `applicationId` in android/app/build.gradle.kts.
-  static const _packageId = 'com.statusmaker.appbedev.status_maker';
+  static const _packageId = 'com.appbedev.statusmaker';
   static const _storeUrl =
       'https://play.google.com/store/apps/details?id=$_packageId';
 
@@ -38,6 +41,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Opens the system share sheet with an invite message + store link.
   void _shareApp() => Share.share('${S.t('share_app_msg')}\n$_storeUrl');
+
+  final NotificationRepository _notifications = NotificationRepository();
+
+  /// Unread notifications, for the badge on the Notifications row. Zero until
+  /// loaded (and on any failure) so the row never waits on the network.
+  int _unread = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnread();
+  }
+
+  Future<void> _loadUnread() async {
+    final n = await _notifications.unreadCount();
+    if (mounted && n != _unread) setState(() => _unread = n);
+  }
+
+  /// Opening the list marks everything read, so the badge is refreshed on
+  /// return rather than cleared optimistically.
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      FadeSlidePageRoute(page: const NotificationsScreen()),
+    ).then((_) => _loadUnread());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +99,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _languageTile('English', 'en'),
           SizedBox(height: 12.h),
           _languageTile('हिंदी', 'hi'),
+
+          SizedBox(height: 32.h),
+          _sectionTitle(S.t('notifications')),
+          SizedBox(height: 4.h),
+          SizedBox(height: 14.h),
+          _notificationsTile(),
 
           SizedBox(height: 32.h),
           _sectionTitle(S.t('about')),
@@ -129,6 +164,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Same card styling as the language tiles, with an unread-count badge.
+  Widget _notificationsTile() {
+    return GestureDetector(
+      onTap: _openNotifications,
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 18.w, vertical: 16.h),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16.r),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.notifications_outlined,
+                color: AppColors.accent, size: 22.w),
+            SizedBox(width: 14.w),
+            Expanded(
+              child: Text(
+                S.t('notifications'),
+                style: TextStyle(
+                  fontSize: 15.sp,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            if (_unread > 0) ...[
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                child: Text(
+                  _unread > 99 ? '99+' : '$_unread',
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              SizedBox(width: 8.w),
+            ],
+            Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 22.w),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _languageTile(String label, String code) {
     final selected = S.lang.value == code;
     return GestureDetector(
@@ -171,18 +257,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _row(IconData icon, String label, {VoidCallback? onTap}) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 4.h),
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Icon(icon, color: AppColors.textSecondary),
-        title: Text(label,
-            style: TextStyle(fontSize: 15.sp, color: AppColors.textPrimary)),
-        trailing: onTap != null
-            ? Icon(Icons.chevron_right, color: AppColors.textSecondary)
-            : null,
-        onTap: onTap,
-      ),
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: AppColors.textSecondary),
+      title: Text(label,
+          style: TextStyle(fontSize: 15.sp, color: AppColors.textPrimary)),
+      trailing: onTap != null
+          ? Icon(Icons.chevron_right, color: AppColors.textSecondary)
+          : null,
+      onTap: onTap,
     );
   }
 }

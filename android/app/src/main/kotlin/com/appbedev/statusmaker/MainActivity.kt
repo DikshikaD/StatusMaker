@@ -1,4 +1,4 @@
-package com.statusmaker.appbedev.status_maker
+package com.appbedev.statusmaker
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

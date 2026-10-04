@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:796851695901:android:a752b0039633b2d007b1f4",
+        "android_client_info": {
+          "package_name": "com.appbedev.statusmaker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4ssNz1oqgiFEPi8MuX8DnhuCbzV9W8Tw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:796851695901:android:a9629d96581e1eb407b1f4",
         "android_client_info": {
           "package_name": "com.statusmaker.appbedev.status_maker"

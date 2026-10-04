@@ -146,7 +146,15 @@ async function sendPush(
 
   const text = await res.text();
   // 404 UNREGISTERED / 400 INVALID_ARGUMENT on the token = uninstalled or stale.
-  if (res.status === 404 || text.includes('UNREGISTERED')) return 'gone';
+  // SENDER_ID_MISMATCH = token was issued by a different Firebase project (e.g.
+  // before the app was re-registered under a new app id) — it can never work.
+  if (
+    res.status === 404 ||
+    text.includes('UNREGISTERED') ||
+    text.includes('SENDER_ID_MISMATCH')
+  ) {
+    return 'gone';
+  }
   console.error(`fcm send failed (${res.status}): ${text}`);
   return 'failed';
 }
@@ -177,9 +185,7 @@ Deno.serve(async (req) => {
 
     const { data: tokens, error } = await supabase
       .from('device_tokens')
-      // `lang` decides the wording per device — the same user can have an
-      // English phone and a Hindi one.
-      .select('token, lang')
+      .select('token')
       .eq('user_id', record.recipient_id);
     if (error) throw error;
 
@@ -250,7 +256,7 @@ Deno.serve(async (req) => {
     const accessToken = await getAccessToken(account);
     const results = await Promise.all(
       tokens.map((t) => {
-        const { title, body } = copyFor(t.lang);
+        const { title, body } = copyFor(null);
         return sendPush(account.project_id, accessToken, t.token, title, body, {
           type: record.type,
           status_id: record.status_id ?? '',
@@ -278,6 +284,9 @@ Deno.serve(async (req) => {
     console.error('notify-on-like failed:', e);
     // 200 on purpose: a webhook retry storm would not fix a bad credential, and
     // a lost push is far less bad than a hot loop. The error is in the logs.
-    return new Response(JSON.stringify({ error: String(e) }), { status: 200 });
+    // Supabase/PostgREST errors are plain objects, so String(e) gives
+    // "[object Object]" — serialise them so the real cause is visible.
+    const detail = e instanceof Error ? e.message : JSON.stringify(e);
+    return new Response(JSON.stringify({ error: detail }), { status: 200 });
   }
 });

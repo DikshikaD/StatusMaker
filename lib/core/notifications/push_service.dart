@@ -216,9 +216,6 @@ class PushService {
         'token': token,
         'user_id': userId,
         'platform': 'android',
-        // Lets the Edge Function word the tray notification in the user's
-        // language while the app is closed.
-        'lang': lang,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'token');
       _registeredToken = token;

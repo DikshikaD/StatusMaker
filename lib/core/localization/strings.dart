@@ -135,6 +135,27 @@ class S {
     'dark_theme': ['Dark', 'डार्क'],
     'dark_mode': ['Dark mode', 'डार्क मोड'],
     'about': ['About', 'परिचय'],
+
+    // settings → notifications
+    'notifications': ['Notifications', 'सूचनाएँ'],
+    'notifications_desc': [
+      'Likes and remixes on your statuses',
+      'आपके स्टेटस पर मिले लाइक और रीमिक्स'
+    ],
+    'notif_empty_title': ['No notifications yet', 'अभी कोई सूचना नहीं'],
+    'notif_empty_msg': [
+      'When someone likes or uses your status, it will show up here.',
+      'जब कोई आपका स्टेटस पसंद करेगा या इस्तेमाल करेगा, वह यहाँ दिखेगा।'
+    ],
+    'notif_like_label': ['Liked your status', 'आपका स्टेटस पसंद किया'],
+    'notif_remix_label': ['Used your template', 'आपका टेम्पलेट इस्तेमाल किया'],
+    'notif_untitled': ['Untitled status', 'बिना शीर्षक स्टेटस'],
+    'notif_status_gone': ['Status no longer available', 'स्टेटस अब उपलब्ध नहीं है'],
+    'time_just_now': ['Just now', 'अभी'],
+    'time_min_ago': ['{n} min ago', '{n} मिनट पहले'],
+    'time_hr_ago': ['{n} hr ago', '{n} घंटे पहले'],
+    'time_yesterday': ['Yesterday', 'कल'],
+    'time_days_ago': ['{n} days ago', '{n} दिन पहले'],
     'version': ['Version', 'वर्शन'],
     'rate_us': ['Rate us', 'हमें रेट करें'],
     'share_app': ['Share app', 'ऐप शेयर करें'],
