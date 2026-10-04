@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_likes_name">लाइक और रीमिक्स</string>
+    <string name="notification_channel_likes_desc">जब कोई आपका स्टेटस पसंद करे या आपका टेम्पलेट इस्तेमाल करे</string>
+</resources>

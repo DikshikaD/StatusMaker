@@ -37,6 +37,17 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="@string/default_notification_channel_id" />
+        <!-- Status-bar icon for FCM pushes drawn while the app is closed.
+             Android renders the small icon as a single-colour silhouette, so a
+             full-colour launcher icon turns into a blank square — this is the
+             app logo as a white-on-transparent glyph (res/drawable-*), tinted
+             with the brand accent. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
         <!-- Lets MainActivity hand an exported status PNG to another app
              (WhatsApp/Instagram/Facebook) as a content:// URI. Authority must
              match PROVIDER_SUFFIX in MainActivity.kt. -->

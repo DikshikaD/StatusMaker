@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tint for the monochrome tray icon (ic_notification). Keep in sync with
+         AppColors.accent in lib/core/theme/app_colors.dart. -->
+    <color name="notification_accent">#EF6745</color>
+</resources>

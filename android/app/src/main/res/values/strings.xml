@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Id of the notification channel FCM pushes land in. Referenced from
-         AndroidManifest.xml and created by PushService on first launch — both
+         AndroidManifest.xml and created by MainActivity on launch — both
          sides must use this same id. -->
     <string name="default_notification_channel_id">status_maker_likes</string>
+    <!-- Shown under Android Settings → Apps → Notifications. Follows the
+         phone's locale (values-hi/ has the Hindi copy). -->
+    <string name="notification_channel_likes_name">Likes &amp; remixes</string>
+    <string name="notification_channel_likes_desc">When someone likes your status or uses your template</string>
 </resources>

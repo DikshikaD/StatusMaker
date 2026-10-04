@@ -1,8 +1,12 @@
 package com.statusmaker.appbedev.status_maker
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -31,6 +35,30 @@ class MainActivity : FlutterActivity() {
             "instagram" to listOf("com.instagram.android", "com.instagram.lite"),
             "facebook" to listOf("com.facebook.katana", "com.facebook.lite"),
         )
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        createNotificationChannel()
+    }
+
+    /**
+     * Creates the channel FCM pushes land in (id from
+     * `default_notification_channel_id` in strings.xml, which the manifest
+     * also points FCM at). Without this, Android 8+ files pushes under an
+     * auto-created "Miscellaneous" channel. Idempotent: re-creating an
+     * existing channel is a no-op.
+     */
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val channel = NotificationChannel(
+            getString(R.string.default_notification_channel_id),
+            getString(R.string.notification_channel_likes_name),
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = getString(R.string.notification_channel_likes_desc)
+        }
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
