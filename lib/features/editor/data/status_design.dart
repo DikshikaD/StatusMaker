@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/template_motif.dart';
+import 'package:status_maker/studio/models/background_config.dart';
 
 /// Bump this whenever the JSON shape changes so older saved designs can be
 /// migrated on load instead of breaking.
@@ -50,6 +51,9 @@ Map<String, dynamic> _bgToJson(BackgroundState b) => {
       'assetPath': b.assetPath,
       'motif': b.motif.name,
       'motifColor': b.motifColor == null ? null : _col(b.motifColor!),
+      // Additive: absent in every design saved before studio backgrounds
+      // existed, which deserialize to null and render exactly as before.
+      'generated': b.generated?.toJson(),
     };
 
 BackgroundState _bgFromJson(Map j) => BackgroundState(
@@ -60,6 +64,10 @@ BackgroundState _bgFromJson(Map j) => BackgroundState(
       assetPath: j['assetPath'] as String?,
       motif: _enumByName(TemplateMotif.values, j['motif'], TemplateMotif.none),
       motifColor: j['motifColor'] == null ? null : _color(j['motifColor']),
+      generated: j['generated'] is Map
+          ? BackgroundConfig.fromJson(
+              Map<String, dynamic>.from(j['generated'] as Map))
+          : null,
     );
 
 Map<String, dynamic> _textToJson(TextObject t) => {
@@ -114,6 +122,10 @@ Map<String, dynamic> _imageToJson(ImageObject i) => {
       'isPlaceholder': i.isPlaceholder,
       'framed': i.framed,
       'frameColor': _col(i.frameColor),
+      // Additive (see ImageObject): older rows lack these and fall back to the
+      // crisp classic look they were saved with.
+      'frameStyle': i.frameStyle.name,
+      'softEdge': i.softEdge,
       'photoOffset': _off(i.photoOffset),
       'photoScale': i.photoScale,
       'z': i.zIndex,
@@ -131,6 +143,9 @@ ImageObject _imageFromJson(Map j) => ImageObject(
       framed: j['framed'] as bool? ?? false,
       frameColor:
           j['frameColor'] == null ? Colors.white : _color(j['frameColor']),
+      frameStyle: _enumByName(
+          PhotoFrameStyle.values, j['frameStyle'], PhotoFrameStyle.classic),
+      softEdge: _d(j['softEdge'], 0),
       photoOffset:
           j['photoOffset'] == null ? Offset.zero : _offset(j['photoOffset']),
       photoScale: _d(j['photoScale'], 1),

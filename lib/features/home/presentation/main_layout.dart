@@ -72,7 +72,15 @@ class _MainLayoutState extends State<MainLayout> {
     // editor, so it's revealed by the editor's own slide-out rather than
     // appearing after it.
     _goToTab(req.index);
-    if (req.showCreations) _creationsTick.value++;
+    // Post-frame, not immediately: the tabs are built lazily (see
+    // _LazyIndexedStack), so a never-visited Favorites tab is only created
+    // by the frame this switch triggers — a tick fired now would land before
+    // it has subscribed, and the jump to "My Creations" would be lost.
+    if (req.showCreations) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _creationsTick.value++;
+      });
+    }
 
     Navigator.of(context).popUntil(
       (route) => route.settings.name == AppNav.shellRouteName || route.isFirst,
@@ -119,7 +127,7 @@ class _MainLayoutState extends State<MainLayout> {
           body: ValueListenableBuilder<int>(
             valueListenable: _index,
             builder: (context, index, __) =>
-                IndexedStack(index: index, children: pages),
+                _LazyIndexedStack(index: index, children: pages),
           ),
           bottomNavigationBar: ValueListenableBuilder<int>(
             valueListenable: _index,
@@ -228,6 +236,42 @@ class _MainLayoutState extends State<MainLayout> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// An [IndexedStack] that builds each tab the first time it is shown and
+/// keeps it alive afterwards.
+///
+/// A plain IndexedStack builds all five tabs at launch. That meant the first
+/// frame paid for the Explore tab's preview canvases and two Favorites
+/// network loads before the Home feed had even started — on a budget phone
+/// most of the perceived startup lag. Now only Home is built at launch; each
+/// other tab is created on its first visit and, from then on, behaves exactly
+/// as before (state preserved across switches, rebuilt on theme / language
+/// change because the parent hands in fresh children).
+class _LazyIndexedStack extends StatefulWidget {
+  final int index;
+  final List<Widget> children;
+
+  const _LazyIndexedStack({required this.index, required this.children});
+
+  @override
+  State<_LazyIndexedStack> createState() => _LazyIndexedStackState();
+}
+
+class _LazyIndexedStackState extends State<_LazyIndexedStack> {
+  final Set<int> _built = <int>{};
+
+  @override
+  Widget build(BuildContext context) {
+    _built.add(widget.index);
+    return IndexedStack(
+      index: widget.index,
+      children: [
+        for (var i = 0; i < widget.children.length; i++)
+          _built.contains(i) ? widget.children[i] : const SizedBox.shrink(),
+      ],
     );
   }
 }

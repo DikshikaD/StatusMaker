@@ -9,6 +9,7 @@ import 'package:status_maker/core/notifications/push_service.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 import 'package:status_maker/features/splash/presentation/splash_screen.dart';
+import 'package:status_maker/studio/shaders/studio_shaders.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,11 +17,16 @@ Future<void> main() async {
   // These are tiny, fast SharedPreferences reads.
   await S.init();
   await ThemeController.init();
-  // Connect to the backend and ensure a (anonymous) session. No-ops safely
-  // until real credentials are added to SupabaseConfig, so startup never breaks.
-  await SupabaseService.init();
-
   runApp(const MyApp());
+
+  // Connect to the backend and ensure a (anonymous) session — deliberately
+  // NOT awaited. With no network, the SDK's session recovery can sit in a
+  // token-refresh retry loop for as long as the connection is down, which
+  // used to hold the first frame hostage. Every repository call waits on
+  // ensureReady() itself (bounded by StatusRepository.readTimeout), so
+  // nothing needs this to have finished before the UI appears. No-ops safely
+  // until real credentials are added to SupabaseConfig.
+  SupabaseService.init();
 
   // Register this device for push AFTER the first frame: it can show the
   // Android 13 permission dialog and talk to the network, neither of which
@@ -34,6 +40,10 @@ Future<void> main() async {
     for (final f in kEditorFonts) {
       GoogleFonts.getFont(f);
     }
+    // Same idea for the studio's fragment shaders: compile them once in the
+    // background now, so the first generated background the user opens is
+    // already the finished picture rather than its fallback gradient.
+    StudioShaders.warmUp();
   });
 }
 

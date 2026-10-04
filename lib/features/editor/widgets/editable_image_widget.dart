@@ -3,7 +3,7 @@ import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/utils/canvas_image.dart';
 import 'package:status_maker/features/editor/utils/image_shape_utils.dart';
-import 'package:status_maker/features/editor/widgets/heart_clipper.dart';
+import 'package:status_maker/features/editor/widgets/photo_frame_painter.dart';
 import 'package:status_maker/features/editor/widgets/transformable_object.dart';
 
 class EditableImageWidget extends StatelessWidget {
@@ -101,13 +101,20 @@ class EditableImageWidget extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            clipToImageShape(image.shape, positionedImg),
+            clipToImageShape(
+              image.shape,
+              empty
+                  ? positionedImg
+                  : softenPhotoEdge(
+                      image.shape, image.softEdge, size, positionedImg),
+            ),
             if (image.framed)
               IgnorePointer(
                 child: CustomPaint(
-                  painter: _ShapeBorderPainter(
+                  painter: PhotoFramePainter(
                     shape: image.shape,
                     color: image.frameColor,
+                    style: image.frameStyle,
                   ),
                 ),
               ),
@@ -116,49 +123,4 @@ class EditableImageWidget extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Strokes the outline of an image's shape to make a photo frame/border.
-class _ShapeBorderPainter extends CustomPainter {
-  final ImageShape shape;
-  final Color color;
-
-  const _ShapeBorderPainter({required this.shape, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final w = size.width;
-    final h = size.height;
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 6
-      ..isAntiAlias = true;
-    final inset = paint.strokeWidth / 2;
-    final rect = Rect.fromLTWH(inset, inset, w - 2 * inset, h - 2 * inset);
-
-    switch (shape) {
-      case ImageShape.square:
-        canvas.drawRect(rect, paint);
-        break;
-      case ImageShape.roundedRectangle:
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, const Radius.circular(24)),
-          paint,
-        );
-        break;
-      case ImageShape.circle:
-      case ImageShape.oval:
-        canvas.drawOval(rect, paint);
-        break;
-      case ImageShape.heart:
-        final path = HeartClipper().getClip(Size(w, h));
-        canvas.drawPath(path, paint);
-        break;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ShapeBorderPainter old) =>
-      old.shape != shape || old.color != color;
 }

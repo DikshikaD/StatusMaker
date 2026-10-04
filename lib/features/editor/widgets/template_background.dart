@@ -3,9 +3,10 @@ import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/template_motif.dart';
 import 'package:status_maker/features/editor/utils/canvas_image.dart';
 import 'package:status_maker/features/editor/widgets/motif_painter.dart';
+import 'package:status_maker/studio/renderers/generated_background.dart';
 
-/// Renders the status background: a gallery image, a built-in gradient, or a
-/// built-in solid colour. Isolated in a RepaintBoundary so foreground edits
+/// Renders the status background: a generated studio recipe, a gallery image,
+/// a built-in gradient, or a built-in solid colour. Isolated in a RepaintBoundary so foreground edits
 /// never repaint it.
 class TemplateBackground extends StatelessWidget {
   final BackgroundState state;
@@ -16,7 +17,11 @@ class TemplateBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget bg;
-    if (state.isAsset) {
+    if (state.isGenerated) {
+      // Procedural studio background — painted live (and re-evaluated at
+      // export resolution), see GeneratedBackground.
+      bg = GeneratedBackground(config: state.generated!);
+    } else if (state.isAsset) {
       bg = Image.asset(
         state.assetPath!,
         fit: BoxFit.cover,

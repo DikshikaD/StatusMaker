@@ -20,6 +20,14 @@ import 'package:status_maker/features/statuses/data/status_repository.dart';
 import 'package:status_maker/shared/utils/native_share.dart';
 import 'package:status_maker/shared/widgets/busy_overlay.dart';
 import 'package:status_maker/shared/widgets/share_target_dialog.dart';
+import 'package:status_maker/features/editor/data/quotes_data.dart';
+import 'package:status_maker/features/editor/utils/sheet_coordinator.dart';
+import 'package:status_maker/studio/models/language_model.dart';
+import 'package:status_maker/studio/models/template_config.dart';
+import 'package:status_maker/studio/presentation/studio_background_sheet.dart';
+import 'package:status_maker/studio/presentation/studio_quote_sheet.dart';
+import 'package:status_maker/studio/quotes/quote_repository.dart';
+import 'package:status_maker/studio/templates/background_swap.dart';
 
 /// The LOCKED editor for a [FixedTemplate]. The design (positions, fonts,
 /// colors, decorations) can't be changed — the user can only:
@@ -42,6 +50,14 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   late List<TextObject> _texts;
   late List<ElementObject> _elements;
   ImageObject? _photo;
+
+  /// The background on the canvas. Starts as the design's own; studio
+  /// templates that allow it can swap in one of their alternates.
+  late BackgroundState _background;
+
+  /// The language the design's wording is currently in. Starts as the app
+  /// language; the locked toolbar's language tool flips it per design.
+  late AppLanguage _lang;
 
   /// Which object the contextual toolbar is acting on, exactly like the free
   /// editor's selection — except here selecting only reveals the applicable
@@ -104,12 +120,46 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     _texts = d.texts;
     _elements = d.elements;
     _photo = d.images.isNotEmpty ? d.images.first : null;
+    _background = _t.background;
+    _lang = _t.languageCode == null
+        ? AppLanguage.current
+        : AppLanguage.fromCode(_t.languageCode);
+  }
+
+  /// The font a slot was authored with — the base `fontForText` substitutes
+  /// from when the slot's wording changes language.
+  String _protoFont(String slotId) {
+    for (final t in _t.texts) {
+      if (t.id == slotId) return t.fontFamily;
+    }
+    return 'Poppins';
+  }
+
+  TextObject? _slot(String? id) {
+    if (id == null) return null;
+    for (final t in _texts) {
+      if (t.id == id) return t;
+    }
+    return null;
+  }
+
+  /// Replaces one slot's words, re-resolving the font so Devanagari never
+  /// lands in a Latin-only face.
+  void _setSlotText(String id, String text) {
+    _edit(() {
+      final i = _texts.indexWhere((e) => e.id == id);
+      if (i == -1) return;
+      _texts[i] = _texts[i].copyWith(
+        text: text,
+        fontFamily: fontForText(_protoFont(id), text),
+      );
+    });
   }
 
   /// The current composition — used both for rendering and for saving, so
   /// what's saved is always exactly what's on screen.
   StatusDesign _currentDesign() => StatusDesign(
-        background: _t.background,
+        background: _background,
         texts: _texts,
         images: [if (_photo != null) _photo!],
         elements: _elements,
@@ -119,8 +169,10 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
       );
 
   // ---- text editing (words only) -------------------------------------------
-  Future<void> _editText(TextObject t, {String? hint}) async {
-    final result = await showModalBottomSheet<String>(
+  /// Opens the words sheet for [t] and returns what was typed (null = closed
+  /// without confirming).
+  Future<String?> _promptText(TextObject t, {String? hint}) {
+    return showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       // Matches every other sheet in the editor: surface (not background —
@@ -132,6 +184,10 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
       ),
       builder: (_) => _TextEditSheet(textObject: t, hint: hint),
     );
+  }
+
+  Future<void> _editText(TextObject t, {String? hint}) async {
+    final result = await _promptText(t, hint: hint);
     if (result == null) return;
     final text = result.trim();
     if (text == t.text) return;
@@ -148,12 +204,99 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   /// The name slot opens empty while it still shows its placeholder, so the
   /// user types their name instead of deleting "— Your Name" first.
   Future<void> _editWords(TextObject t) async {
-    final isName = t.id == _t.nameSlotId;
-    if (isName && t.text == S.t('name_placeholder')) {
-      await _editText(t.copyWith(text: ''), hint: S.t('your_name'));
+    if (t.id == _t.nameSlotId) {
+      await _editName(t);
       return;
     }
-    await _editText(t, hint: isName ? S.t('your_name') : null);
+    await _editText(t);
+  }
+
+  /// The name slot. Designs with a [FixedTemplate.nameFormat] dress the bare
+  /// name ("Raj" → "— Raj") and un-dress it for re-editing; the hand-authored
+  /// designs keep their words-as-typed behaviour.
+  Future<void> _editName(TextObject t) async {
+    final format = _t.nameFormat;
+    final String current;
+    if (t.text == S.t('name_placeholder')) {
+      current = '';
+    } else {
+      current = format == null ? t.text : NameStyle.strip(t.text);
+    }
+    final result =
+        await _promptText(t.copyWith(text: current), hint: S.t('your_name'));
+    if (result == null) return;
+    final raw = result.trim();
+    // An empty name is simply not shown — the slot stays blank.
+    final text = raw.isEmpty ? '' : (format == null ? raw : format(raw));
+    if (text == t.text) return;
+    _setSlotText(t.id, text);
+  }
+
+  // ---- studio: whole-design options (quote / background / language) ------
+  Future<void> _changeQuote() async {
+    final slotId = _t.quoteSlotId;
+    final slot = _slot(slotId);
+    if (slotId == null || slot == null) return;
+    final cat = _t.studioCategory;
+    final quotes = cat != null
+        ? QuoteRepository.textsFor(cat, _lang, tag: _t.quoteTag)
+        : quotesForCategory(_t.quoteCategory);
+    await SheetCoordinator.show(
+      context,
+      builder: (_) => StudioQuoteSheet(
+        quotes: quotes,
+        current: slot.text,
+        onSelect: (q) => _setSlotText(slotId, q),
+      ),
+    );
+  }
+
+  Future<void> _changeBackground() async {
+    if (!_t.allowBackgroundChange) return;
+    await SheetCoordinator.show(
+      context,
+      builder: (_) => StudioBackgroundSheet(
+        backgrounds: [_t.background, ..._t.alternateBackgrounds],
+        current: _background,
+        onSelect: _applyBackground,
+      ),
+    );
+  }
+
+  /// Swaps the background and re-maps the palette roles (text / muted /
+  /// accent) of every slot so the words stay readable on the new colours.
+  void _applyBackground(BackgroundState bg) {
+    _edit(() {
+      final from = _background.generated;
+      final to = bg.generated;
+      if (from != null && to != null && from != to) {
+        _texts = BackgroundSwap.texts(_texts, from, to);
+        _elements = BackgroundSwap.elements(_elements, from, to);
+        _photo = BackgroundSwap.photo(_photo, from, to);
+      }
+      _background = bg;
+    });
+  }
+
+  /// Flips the design's wording to the other language. Only slots still
+  /// showing the design's own text change — anything the user typed is kept,
+  /// and the name is never touched.
+  void _toggleLanguage() {
+    final next = _lang.other;
+    _edit(() {
+      for (var i = 0; i < _texts.length; i++) {
+        final t = _texts[i];
+        if (t.id == _t.nameSlotId) continue;
+        final was = _t.textFor(t.id, hindi: _lang.isHindi);
+        final now = _t.textFor(t.id, hindi: next.isHindi);
+        if (was == null || now == null || t.text != was) continue;
+        _texts[i] = t.copyWith(
+          text: now,
+          fontFamily: fontForText(_protoFont(t.id), now),
+        );
+      }
+      _lang = next;
+    });
   }
 
   /// Applies a style change from the text toolbar. Only properties that can't
@@ -579,11 +722,21 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
       );
     } else {
       key = 'idle';
+      final nameSlot = _slot(_t.nameSlotId);
       child = LockedIdleBar(
         // Only when the design takes a photo and there's no slot on the canvas
         // to tap — otherwise the canvas itself is the affordance.
         onAddPhoto:
             _t.hasPhotoOption && _photo == null ? _addOrReplacePhoto : null,
+        // Studio options — each null (hidden) for designs that don't offer it.
+        onQuotes: _t.hasQuoteSlot ? _changeQuote : null,
+        onBackground: _t.allowBackgroundChange ? _changeBackground : null,
+        onLanguage: _t.allowLanguageChange ? _toggleLanguage : null,
+        languageLabel: _lang.other.nativeName,
+        // An empty name slot is invisible on the canvas, so it needs a button.
+        onAddName: nameSlot != null && nameSlot.text.isEmpty
+            ? () => _editName(nameSlot)
+            : null,
       );
     }
 

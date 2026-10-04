@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/features/editor/data/template_motif.dart';
+import 'package:status_maker/studio/models/background_config.dart';
 
 /// Layout width a text object uses until the user resizes it by hand. Also the
 /// value every pre-`boxWidth` saved design deserializes to, so old designs are
@@ -28,6 +29,12 @@ const double kObjectContentPadding = 6;
 /// The five shapes a floating image can take. Nothing else.
 enum ImageShape { square, roundedRectangle, circle, oval, heart }
 
+/// How a photo's border is drawn when [ImageObject.framed] is on. `classic` is
+/// the original 6px stroke every existing design uses; the rest are the
+/// studio templates' premium frames. Painted inside the slot's box, so none
+/// of them change where or how big the photo is.
+enum PhotoFrameStyle { classic, thin, gold, doubleLine, glow }
+
 /// A floating image placed on the canvas. Multiple are allowed.
 class ImageObject {
   final String id;
@@ -39,6 +46,16 @@ class ImageObject {
   bool isPlaceholder; // true = a shaped "add photo" frame, not yet filled
   bool framed; // draw a decorative border around the photo's shape
   Color frameColor;
+
+  /// Which border [framed] draws. Additive: designs saved before this existed
+  /// deserialize to `classic`, which is exactly what they rendered.
+  PhotoFrameStyle frameStyle;
+
+  /// Width of the feathered (soft) edge in the shape's own unscaled pixels.
+  /// 0 (the default, and what every older design loads as) keeps the crisp
+  /// clip. Studio templates use 14–30 so a photo melts into its background
+  /// instead of sitting on it like a sticker.
+  double softEdge;
 
   // Where inside its shape the photo itself is panned/zoomed to — independent
   // of `position`/`scale` above, which move the whole shaped frame on the
@@ -70,6 +87,8 @@ class ImageObject {
     this.isPlaceholder = false,
     this.framed = false,
     this.frameColor = Colors.white,
+    this.frameStyle = PhotoFrameStyle.classic,
+    this.softEdge = 0.0,
     this.photoOffset = Offset.zero,
     this.photoScale = 1.0,
     this.zIndex = 0,
@@ -84,6 +103,8 @@ class ImageObject {
     bool? isPlaceholder,
     bool? framed,
     Color? frameColor,
+    PhotoFrameStyle? frameStyle,
+    double? softEdge,
     Offset? photoOffset,
     double? photoScale,
     int? zIndex,
@@ -98,6 +119,8 @@ class ImageObject {
       isPlaceholder: isPlaceholder ?? this.isPlaceholder,
       framed: framed ?? this.framed,
       frameColor: frameColor ?? this.frameColor,
+      frameStyle: frameStyle ?? this.frameStyle,
+      softEdge: softEdge ?? this.softEdge,
       photoOffset: photoOffset ?? this.photoOffset,
       photoScale: photoScale ?? this.photoScale,
       zIndex: zIndex ?? this.zIndex,
@@ -340,6 +363,12 @@ class BackgroundState {
   final TemplateMotif motif; // decorative overlay (part of the design)
   final Color? motifColor;
 
+  /// A procedurally painted studio background (mesh gradient, grain, rays,
+  /// …). Takes precedence over [color]/[gradientColors] when set. Stored as a
+  /// recipe rather than an image, so a saved design reopens pixel-identical
+  /// on any device with nothing to download — see `BackgroundConfig`.
+  final BackgroundConfig? generated;
+
   const BackgroundState({
     this.color,
     this.gradientColors,
@@ -347,11 +376,28 @@ class BackgroundState {
     this.assetPath,
     this.motif = TemplateMotif.none,
     this.motifColor,
+    this.generated,
   });
 
   bool get isGradient => gradientColors != null && gradientColors!.isNotEmpty;
   bool get isImage => imagePath != null;
   bool get isAsset => assetPath != null;
+  bool get isGenerated => generated != null;
+
+  BackgroundState copyWith({
+    TemplateMotif? motif,
+    Color? motifColor,
+    BackgroundConfig? generated,
+  }) =>
+      BackgroundState(
+        color: color,
+        gradientColors: gradientColors,
+        imagePath: imagePath,
+        assetPath: assetPath,
+        motif: motif ?? this.motif,
+        motifColor: motifColor ?? this.motifColor,
+        generated: generated ?? this.generated,
+      );
 }
 
 /// One point-in-time copy of everything undo/redo needs to restore.

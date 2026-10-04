@@ -103,6 +103,14 @@ class S {
     'cat_Good Night': ['Good Night', 'शुभ रात्रि'],
     'cat_Suvichar': ['Suvichar', 'सुविचार'],
     'cat_General': ['General', 'सामान्य'],
+    // Themes added with the generated-template studio.
+    'cat_Success': ['Success', 'सफलता'],
+    'cat_Friendship': ['Friendship', 'दोस्ती'],
+    'cat_Wishes': ['Wishes', 'शुभकामनाएँ'],
+    'cat_Nature': ['Nature', 'प्रकृति'],
+    'cat_Heartbreak': ['Heartbreak', 'दिल की बात'],
+    'cat_Minimal': ['Minimal', 'मिनिमल'],
+    'cat_Dark': ['Dark', 'डार्क'],
 
     // category picker (create flow)
     'choose_category': ['Choose a category', 'श्रेणी चुनें'],
@@ -309,6 +317,14 @@ class S {
       'Create a status and tap Post to share it with everyone here.',
       'एक स्टेटस बनाएँ और सबके साथ शेयर करने के लिए पोस्ट पर टैप करें।'
     ],
+    'server_unreachable_title': [
+      'Can\'t reach the server',
+      'सर्वर से संपर्क नहीं हो पा रहा'
+    ],
+    'server_unreachable_msg': [
+      'Check your internet connection, or try again in a little while.',
+      'अपना इंटरनेट कनेक्शन जाँचें, या थोड़ी देर बाद फिर कोशिश करें।'
+    ],
     'feed_error_title': ['Couldn\'t load feed', 'फ़ीड लोड नहीं हो सका'],
     'feed_error_msg': [
       'Something went wrong. Pull down to refresh.',
@@ -435,5 +451,13 @@ class S {
     // editor — quotes sheet / starter
     'tap_quote': ['Tap a quote to add', 'जोड़ने के लिए कोट टैप करें'],
     'double_tap_edit': ['Double tap to edit', 'एडिट के लिए डबल टैप करें'],
+
+    // studio — generated templates & backgrounds
+    'designer_backgrounds': ['Designer backgrounds', 'डिज़ाइनर बैकग्राउंड'],
+    'pick_quote': ['Pick a quote', 'कोट चुनें'],
+    'pick_background': ['Pick a background', 'बैकग्राउंड चुनें'],
+    'change_quote': ['Quote', 'कोट'],
+    'add_name': ['Add name', 'नाम जोड़ें'],
+    'templates_in': ['Templates in', 'टेम्पलेट की भाषा'],
   };
 }

@@ -9,7 +9,7 @@ import 'package:status_maker/features/editor/utils/image_shape_utils.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 import 'package:status_maker/features/editor/widgets/element_painter.dart';
 import 'package:status_maker/features/editor/widgets/frame_painter.dart';
-import 'package:status_maker/features/editor/widgets/heart_clipper.dart';
+import 'package:status_maker/features/editor/widgets/photo_frame_painter.dart';
 import 'package:status_maker/features/editor/widgets/template_background.dart';
 
 /// Renders a [StatusDesign] with a completely LOCKED layout: every object is
@@ -249,13 +249,21 @@ class FixedTemplateCanvas extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            clipToImageShape(img.shape, content),
+            clipToImageShape(
+              img.shape,
+              // Soft edges only apply to a real photo — the "Add photo"
+              // placeholder box stays crisp so it reads as a tappable slot.
+              empty
+                  ? content
+                  : softenPhotoEdge(img.shape, img.softEdge, size, content),
+            ),
             if (img.framed)
               IgnorePointer(
                 child: CustomPaint(
-                  painter: _SlotBorderPainter(
+                  painter: PhotoFramePainter(
                     shape: img.shape,
                     color: img.frameColor,
+                    style: img.frameStyle,
                   ),
                 ),
               ),
@@ -295,49 +303,4 @@ class FixedTemplateCanvas extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Strokes the outline of a photo slot's shape — same look as the free
-/// editor's framed photos.
-class _SlotBorderPainter extends CustomPainter {
-  final ImageShape shape;
-  final Color color;
-
-  const _SlotBorderPainter({required this.shape, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 6
-      ..isAntiAlias = true;
-    final inset = paint.strokeWidth / 2;
-    final rect = Rect.fromLTWH(
-        inset, inset, size.width - 2 * inset, size.height - 2 * inset);
-
-    switch (shape) {
-      case ImageShape.square:
-        canvas.drawRect(rect, paint);
-        break;
-      case ImageShape.roundedRectangle:
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, const Radius.circular(24)),
-          paint,
-        );
-        break;
-      case ImageShape.circle:
-      case ImageShape.oval:
-        canvas.drawOval(rect, paint);
-        break;
-      case ImageShape.heart:
-        canvas.drawPath(
-            HeartClipper().getClip(Size(size.width, size.height)), paint);
-        break;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _SlotBorderPainter old) =>
-      old.shape != shape || old.color != color;
 }

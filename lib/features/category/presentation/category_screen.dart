@@ -10,26 +10,80 @@ import 'package:status_maker/features/editor/presentation/status_personalizer_sc
 import 'package:status_maker/features/editor/widgets/motif_painter.dart';
 import 'package:status_maker/features/editor/widgets/heart_clipper.dart';
 import 'package:status_maker/core/utils/responsive.dart';
+import 'package:status_maker/features/editor/data/fixed_templates.dart';
+import 'package:status_maker/studio/models/category_model.dart';
+import 'package:status_maker/studio/models/language_model.dart';
+import 'package:status_maker/studio/presentation/template_card.dart';
+import 'package:status_maker/studio/presentation/template_language_switch.dart';
+import 'package:status_maker/studio/templates/template_catalog.dart';
 
-class CategoryScreen extends StatelessWidget {
+/// The theme names that have hand-authored designs in templates_data.dart.
+/// Themes added with the studio (Success, Nature, Dark, …) have only
+/// generated designs, so the legacy builder — which would fall back to its
+/// generic set — is skipped for them.
+const Set<String> _legacyThemes = {
+  'Good Morning',
+  'Morning',
+  'Birthday',
+  'Festival',
+  'Motivation',
+  'Love',
+  'Business',
+  'Devotional',
+  'Suprabhat',
+  'Good Night',
+  'Suvichar',
+};
+
+/// One theme's designs, in a single grid: the generated studio templates for
+/// the matching category first (locked editor, with quote / photo / name /
+/// background / language options), then the hand-authored designs that open
+/// in the free editor. Both kinds are 9:16 cards, so they share one grid.
+class CategoryScreen extends StatefulWidget {
   final String categoryName;
 
   const CategoryScreen({super.key, required this.categoryName});
 
   @override
+  State<CategoryScreen> createState() => _CategoryScreenState();
+}
+
+class _CategoryScreenState extends State<CategoryScreen> {
+  /// Language the generated designs carry — starts as the app language.
+  AppLanguage _lang = AppLanguage.current;
+
+  String get _name => widget.categoryName;
+
+  @override
   Widget build(BuildContext context) {
-    final templates = templatesForCategory(categoryName);
+    final studioId = studioCategoryForTheme(_name);
+    final generated = studioId == null
+        ? const <FixedTemplate>[]
+        : TemplateCatalog.templatesFor(studioId, language: _lang);
+    final legacy = _legacyThemes.contains(_name)
+        ? templatesForCategory(_name)
+        : const <StatusTemplate>[];
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(
-          '${S.cat(categoryName)} ${S.t('category_templates')}',
+          '${S.cat(_name)} ${S.t('category_templates')}',
           style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
+        actions: [
+          if (generated.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(right: 12.w),
+              child: TemplateLanguageSwitch(
+                value: _lang,
+                onChanged: (l) => setState(() => _lang = l),
+              ),
+            ),
+        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,6 +98,10 @@ class CategoryScreen extends StatelessWidget {
           ),
           Expanded(
             child: GridView.builder(
+              // Keyed on the language so switching rebuilds the generated
+              // cards instead of morphing one language's canvases into the
+              // other's.
+              key: ValueKey(_lang.code),
               padding: EdgeInsets.fromLTRB(
                   AppDimensions.paddingLarge, 0, AppDimensions.paddingLarge, AppDimensions.paddingLarge),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -52,14 +110,24 @@ class CategoryScreen extends StatelessWidget {
                 crossAxisSpacing: 16.w,
                 mainAxisSpacing: 16.h,
               ),
-              itemCount: templates.length,
-              // Each tile draws a gradient + CustomPaint motif + styled text;
+              itemCount: generated.length + legacy.length,
+              // Each tile draws a gradient / shader background + styled text;
               // a RepaintBoundary keeps one tile's paint from touching others
               // while the grid scrolls.
-              itemBuilder: (context, index) => RepaintBoundary(
-                child: TemplateCard(
-                    template: templates[index], category: categoryName),
-              ),
+              itemBuilder: (context, index) {
+                if (index < generated.length) {
+                  final t = generated[index];
+                  return StudioTemplateCard(
+                    template: t,
+                    onTap: () => openStudioTemplate(context, t),
+                  );
+                }
+                return RepaintBoundary(
+                  child: TemplateCard(
+                      template: legacy[index - generated.length],
+                      category: _name),
+                );
+              },
             ),
           ),
         ],

@@ -64,6 +64,64 @@ class FixedTemplate {
   /// placeholder so the design never ships a blank gap.
   final String? nameSlotId;
 
+  // ---- Studio (generated template) extensions ------------------------------
+  // All optional with defaults that reproduce the original behaviour exactly,
+  // so the hand-authored designs above are untouched by their existence.
+
+  /// Per-slot wording for Hindi / English, keyed by slot id. The generator
+  /// fills both from the quote store so one template serves either language;
+  /// the hand-authored designs use the file-level `_hiText` map instead.
+  final Map<String, String> hiText;
+  final Map<String, String> enText;
+
+  /// Per-slot line allowance overrides. Generated quotes are authored as one
+  /// string with no `\n`, so the authored-line-count rule in [lineLimits]
+  /// would clamp them to a single line; the generator sets the real allowance
+  /// of each layout's quote slot here instead.
+  final Map<String, int> maxLines;
+
+  /// The slot that carries the quote — what "Change quote" replaces.
+  final String? quoteSlotId;
+
+  /// Whether an empty name slot shows the localised "— Your Name" placeholder
+  /// (the hand-authored designs do; studio templates leave an empty name
+  /// slot genuinely blank so an unfilled name never ends up in the export).
+  final bool showNamePlaceholder;
+
+  /// Dresses the user's raw name for this design ("Raj" → "— Raj"). Null
+  /// keeps the name exactly as typed.
+  final String Function(String raw)? nameFormat;
+
+  /// Backgrounds the user may swap in from the locked editor. Empty = the
+  /// background is part of the design and stays fixed.
+  final List<BackgroundState> alternateBackgrounds;
+
+  /// Whether the locked editor offers an English ⇄ Hindi switch for this
+  /// design's quote. Needs both [hiText] and [enText] for the quote slot.
+  final bool allowLanguageChange;
+
+  /// Studio category id (see `kStudioCategories`), when generated.
+  final String? studioCategory;
+
+  /// Overrides the theme-derived [quoteCategory] for generated designs.
+  final String? quoteCategoryKey;
+
+  /// Sub-theme the quote pool is restricted to (Festival occasions), so a
+  /// Diwali card's "Change quote" never offers an Eid line.
+  final String? quoteTag;
+
+  /// Language this design's wording is shown in ('en' / 'hi'). Null — every
+  /// hand-authored design — follows the app language. Generated templates
+  /// set it, so the studio's "templates in Hindi" switch can show Hindi
+  /// cards inside an English UI (and vice versa).
+  final String? languageCode;
+
+  /// Whether to show Hindi wording right now.
+  bool get showsHindi => languageCode == null ? S.isHi : languageCode == 'hi';
+
+  /// Cache key for the language-dependent memos below.
+  String get _langKey => languageCode ?? S.lang.value;
+
   // Not const: the template memoizes its preview design and line limits below,
   // which needs mutable fields. Nothing constructs these as const anyway — each
   // entry in [kFixedTemplates] is built from helper calls.
@@ -80,14 +138,41 @@ class FixedTemplate {
     this.frame = StatusFrame.none,
     this.frameColor = Colors.white,
     this.frameWidth = 1.0,
+    this.hiText = const {},
+    this.enText = const {},
+    this.maxLines = const {},
+    this.quoteSlotId,
+    this.showNamePlaceholder = true,
+    this.nameFormat,
+    this.alternateBackgrounds = const [],
+    this.allowLanguageChange = false,
+    this.studioCategory,
+    this.quoteCategoryKey,
+    this.quoteTag,
+    this.languageCode,
   });
 
   bool get hasPhotoOption => photo != null;
   bool get hasNameSlot => nameSlotId != null;
+  bool get hasQuoteSlot => quoteSlotId != null;
+  bool get allowBackgroundChange => alternateBackgrounds.isNotEmpty;
+
+  /// The wording slot [slotId] shows in [hindi] or English: the per-template
+  /// override if there is one, else the file-level Hindi map, else whatever
+  /// the slot was authored with. Null for an unknown slot.
+  String? textFor(String slotId, {required bool hindi}) {
+    for (final t in texts) {
+      if (t.id != slotId) continue;
+      final override = hindi ? (hiText[slotId] ?? _hiText[slotId]) : enText[slotId];
+      return override ?? t.text;
+    }
+    return null;
+  }
 
   /// The quote category that best matches this theme, so opening the design in
   /// the editor can suggest lines that fit it.
   String get quoteCategory {
+    if (quoteCategoryKey != null) return quoteCategoryKey!;
     switch (theme) {
       case 'morning':
         return 'Suprabhat';
@@ -119,16 +204,17 @@ class FixedTemplate {
   Map<String, int>? _lineLimits;
   String? _lineLimitsLang;
   Map<String, int> get lineLimits {
-    if (_lineLimits != null && _lineLimitsLang == S.lang.value) {
+    if (_lineLimits != null && _lineLimitsLang == _langKey) {
       return _lineLimits!;
     }
-    _lineLimitsLang = S.lang.value;
+    _lineLimitsLang = _langKey;
     return _lineLimits = {
       for (final t in texts)
-        t.id: () {
-          final shown = (S.isHi ? _hiText[t.id] : null) ?? t.text;
-          return shown.isEmpty ? 1 : shown.split('\n').length;
-        }(),
+        t.id: maxLines[t.id] ??
+            () {
+              final shown = textFor(t.id, hindi: showsHindi) ?? t.text;
+              return shown.isEmpty ? 1 : shown.split('\n').length;
+            }(),
     };
   }
 
@@ -142,8 +228,8 @@ class FixedTemplate {
   /// editor — use [design], which returns an independent copy that's safe to
   /// mutate.
   StatusDesign previewDesign() {
-    if (_preview != null && _previewLang == S.lang.value) return _preview!;
-    _previewLang = S.lang.value;
+    if (_preview != null && _previewLang == _langKey) return _preview!;
+    _previewLang = _langKey;
     return _preview = design();
   }
 
@@ -157,13 +243,15 @@ class FixedTemplate {
         background: background,
         texts: texts.map((t) {
           final copy = t.copyWith();
-          if (t.id == nameSlotId && copy.text.isEmpty) {
+          if (t.id == nameSlotId && copy.text.isEmpty && showNamePlaceholder) {
             copy.text = S.t('name_placeholder');
           }
           // Slots authored in English get their Hindi wording here rather than
           // in the static list, so switching language re-resolves them.
-          final hi = S.isHi ? _hiText[t.id] : null;
-          if (hi != null) copy.text = hi;
+          // Generated designs carry both languages in hiText/enText.
+          final localized =
+              showsHindi ? (hiText[t.id] ?? _hiText[t.id]) : enText[t.id];
+          if (localized != null) copy.text = localized;
           // The authored font may be Latin-only; Devanagari would silently
           // fall back to a system face and lose the design's character.
           copy.fontFamily = fontForText(copy.fontFamily, copy.text);

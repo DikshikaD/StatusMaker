@@ -344,7 +344,41 @@ class LockedIdleBar extends StatelessWidget {
   /// is nothing on the canvas to tap.
   final VoidCallback? onAddPhoto;
 
-  const LockedIdleBar({super.key, this.onAddPhoto});
+  // Studio templates expose a few whole-design options that have no object
+  // on the canvas to tap. Each is shown only when non-null, so the
+  // hand-authored designs — which pass none of them — look exactly as before.
+
+  /// Pick a different ready-made quote for the design's quote slot.
+  final VoidCallback? onQuotes;
+
+  /// Swap in another of the design's alternate backgrounds.
+  final VoidCallback? onBackground;
+
+  /// Switch the design's wording to the other language.
+  final VoidCallback? onLanguage;
+
+  /// Label for [onLanguage] — the language it switches *to*.
+  final String? languageLabel;
+
+  /// Fill the (currently empty, and therefore invisible) name slot.
+  final VoidCallback? onAddName;
+
+  const LockedIdleBar({
+    super.key,
+    this.onAddPhoto,
+    this.onQuotes,
+    this.onBackground,
+    this.onLanguage,
+    this.languageLabel,
+    this.onAddName,
+  });
+
+  bool get _hasTools =>
+      onAddPhoto != null ||
+      onQuotes != null ||
+      onBackground != null ||
+      onLanguage != null ||
+      onAddName != null;
 
   @override
   Widget build(BuildContext context) {
@@ -372,16 +406,57 @@ class LockedIdleBar extends StatelessWidget {
                 ),
               ],
             ),
-            if (onAddPhoto != null) ...[
+            if (_hasTools) ...[
               SizedBox(height: 6.h),
-              _Tool(
-                label: S.t('add_photo'),
-                active: false,
-                onTap: onAddPhoto!,
-                childBuilder: (c) => Icon(
-                  Icons.add_photo_alternate_outlined,
-                  color: c,
-                  size: 22.w,
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (onQuotes != null)
+                      _Tool(
+                        label: S.t('change_quote'),
+                        active: false,
+                        onTap: onQuotes!,
+                        childBuilder: (c) => Icon(Icons.format_quote_rounded,
+                            color: c, size: 22.w),
+                      ),
+                    if (onAddPhoto != null)
+                      _Tool(
+                        label: S.t('add_photo'),
+                        active: false,
+                        onTap: onAddPhoto!,
+                        childBuilder: (c) => Icon(
+                          Icons.add_photo_alternate_outlined,
+                          color: c,
+                          size: 22.w,
+                        ),
+                      ),
+                    if (onAddName != null)
+                      _Tool(
+                        label: S.t('add_name'),
+                        active: false,
+                        onTap: onAddName!,
+                        childBuilder: (c) =>
+                            Icon(Icons.badge_outlined, color: c, size: 22.w),
+                      ),
+                    if (onBackground != null)
+                      _Tool(
+                        label: S.t('background'),
+                        active: false,
+                        onTap: onBackground!,
+                        childBuilder: (c) => Icon(Icons.wallpaper_rounded,
+                            color: c, size: 22.w),
+                      ),
+                    if (onLanguage != null)
+                      _Tool(
+                        label: languageLabel ?? S.t('language'),
+                        active: false,
+                        onTap: onLanguage!,
+                        childBuilder: (c) =>
+                            Icon(Icons.translate_rounded, color: c, size: 22.w),
+                      ),
+                  ],
                 ),
               ),
             ],

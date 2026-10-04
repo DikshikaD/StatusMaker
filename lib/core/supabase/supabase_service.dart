@@ -28,11 +28,19 @@ class SupabaseService {
 
   static SupabaseClient get client => Supabase.instance.client;
 
-  /// Current user id (anonymous or real), or null if not signed in yet.
-  static String? get userId => Supabase.instance.client.auth.currentUser?.id;
+  /// Current user id (anonymous or real), or null if not signed in yet — or
+  /// if the SDK hasn't finished initialising (startup no longer waits for
+  /// it, so UI that runs early must not trip `Supabase.instance`'s assert).
+  static String? get userId {
+    if (!_initialized) return null;
+    return Supabase.instance.client.auth.currentUser?.id;
+  }
 
-  /// Call once in main(). Safe to call when unconfigured — it just no-ops.
-  /// Never throws to the caller, so a backend hiccup can't block app startup.
+  /// Kick off initialisation + sign-in. Called from main() **without**
+  /// awaiting: the SDK's session recovery can block on a token refresh for as
+  /// long as the network is down, and nothing on the first screen needs the
+  /// backend yet — every repository read/write calls [ensureReady] itself.
+  /// Never throws.
   static Future<void> init() async {
     await ensureReady();
   }
@@ -40,7 +48,15 @@ class SupabaseService {
   /// Idempotent: makes sure Supabase is initialised and there's a session.
   /// Returns true when ready. Safe to call again (e.g. from a Save/Post retry)
   /// if a previous attempt failed for a transient reason. Never throws.
-  static Future<bool> ensureReady() async {
+  ///
+  /// Concurrent callers (the feed, likes and push registration all ask at
+  /// launch) share one in-flight attempt instead of racing three sign-ins.
+  static Future<bool> ensureReady() =>
+      _inFlight ??= _ensureReady().whenComplete(() => _inFlight = null);
+
+  static Future<bool>? _inFlight;
+
+  static Future<bool> _ensureReady() async {
     if (!isConfigured) {
       debugPrint('SupabaseService: not configured — backend disabled.');
       return false;

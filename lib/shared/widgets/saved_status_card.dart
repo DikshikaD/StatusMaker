@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
@@ -140,17 +141,23 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
               fit: StackFit.expand,
               children: [
                 if (s.thumbUrl != null && s.thumbUrl!.isNotEmpty)
-                  Image.network(
-                    s.thumbUrl!,
+                  Image(
+                    // Disk-cached, not Image.network: the feed's thumbnails
+                    // are the same URLs every launch, and Image.network keeps
+                    // them only in memory — so each cold start re-downloaded
+                    // the whole feed (slow on mobile data, and it costs
+                    // storage egress). ResizeImage decodes at most at the
+                    // card's on-screen width: a feed of full-resolution
+                    // thumbnails decoded at source size janks and OOM-kills
+                    // low-end Android while the card only paints screen-wide.
+                    image: ResizeImage(
+                      CachedNetworkImageProvider(s.thumbUrl!),
+                      width: (ScreenUtil.screenWidth *
+                              MediaQuery.devicePixelRatioOf(context))
+                          .round(),
+                    ),
                     fit: BoxFit.cover,
                     gaplessPlayback: true,
-                    // Decode at most at the card's on-screen width. Without
-                    // this a feed of full-resolution thumbnails decodes each
-                    // at source size, which janks and OOM-kills low-end
-                    // Android while the card only ever paints screen-wide.
-                    cacheWidth: (ScreenUtil.screenWidth *
-                            MediaQuery.devicePixelRatioOf(context))
-                        .round(),
                     // Fade the photo in once decoded (no pop-in).
                     frameBuilder: (context, child, frame, wasSync) {
                       if (wasSync) return child;

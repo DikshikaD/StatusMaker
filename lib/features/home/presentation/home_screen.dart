@@ -71,9 +71,13 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     try {
       // Which of these the user has already liked, so the hearts are right on
-      // the first frame instead of all starting empty.
-      await LikesStore.instance.ensureLoaded();
+      // the first frame instead of all starting empty. Requested alongside
+      // the feed rather than before it — two round trips in parallel, not in
+      // series. Both are bounded by StatusRepository.readTimeout, so an
+      // offline phone reaches the Retry state instead of shimmering forever.
+      final likes = LikesStore.instance.ensureLoaded();
       final items = await _repo.fetchPublic(category: _selected);
+      await likes;
       if (!mounted) return;
       // Seed the counts from server truth before showing them.
       LikesStore.instance.syncFromRows(items);
@@ -280,12 +284,22 @@ class _HomeScreenState extends State<HomeScreen> {
     // just its own content height, so EmptyState's own Center actually centres
     // it on screen rather than parking it right under the category chips.
     if (_failed) {
+      // Name the real problem when we know it: a server that can't be
+      // reached (no connectivity, or the backend project is down) reads very
+      // differently from a query that errored.
+      final unreachable =
+          StatusRepository.lastFailure == BackendFailure.unreachable ||
+              StatusRepository.lastFailure == BackendFailure.timeout;
       return SliverFillRemaining(
         hasScrollBody: false,
         child: EmptyState(
           icon: Icons.cloud_off_rounded,
-          title: S.t('something_wrong'),
-          message: S.t('try_again_msg'),
+          title: unreachable
+              ? S.t('server_unreachable_title')
+              : S.t('something_wrong'),
+          message: unreachable
+              ? S.t('server_unreachable_msg')
+              : S.t('try_again_msg'),
           actionLabel: S.t('retry'),
           onAction: _load,
         ),

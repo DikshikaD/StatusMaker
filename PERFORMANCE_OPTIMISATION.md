@@ -416,3 +416,18 @@ until the next mutation of that specific list.
   (not paint) as a bottleneck after this pass.
 - **ℹ️ Consider `flutter build --analyze-size` and DevTools "Raster"/"Memory"
   tabs** in profile mode to confirm frame times and locate any remaining spikes.
+
+---
+
+## Pass 3 — startup, offline feed, tab laziness (2026-10-03)
+
+| # | Change | File(s) |
+|---|--------|---------|
+| 1 | Startup no longer awaits Supabase init / sign-in. The SDK's session recovery can block on a token refresh while offline (gotrue retries up to 999 times); every repository call waits on `ensureReady()` itself. `userId` is null-safe before init. | `lib/main.dart`, `core/supabase/supabase_service.dart` |
+| 2 | Every backend **read** is bounded by `StatusRepository.readTimeout` (10 s), including the `ensureReady()` wait. An offline phone now reaches the Retry / empty state instead of shimmering forever. | `features/statuses/data/status_repository.dart` |
+| 3 | Home feed requests the feed and the user's likes in parallel instead of in series. | `features/home/presentation/home_screen.dart` |
+| 4 | Feed thumbnails use `CachedNetworkImageProvider` (disk cache) + `ResizeImage`, so a cold start no longer re-downloads the feed. | `shared/widgets/saved_status_card.dart` |
+| 5 | Tabs are built lazily (`_LazyIndexedStack`): only Home at launch; Explore / Create / Favorites / Settings on first visit. Favorites' "jump to My Creations" tick is deferred one frame so a freshly built tab receives it. | `features/home/presentation/main_layout.dart` |
+| 6 | Create tab trimmed to banner + Themes; the Ready Templates rows live on Explore only. Generated designs sit behind their theme. | `features/create/presentation/create_screen.dart` |
+| 7 | Concurrent `ensureReady()` callers share one in-flight attempt instead of racing sign-ins. | `core/supabase/supabase_service.dart` |
+| 8 | Reads first do a 3 s DNS lookup of the Supabase host; with no connectivity it fails in milliseconds, so the offline Retry state is immediate rather than waiting out the 10 s bound. | `features/statuses/data/status_repository.dart` |

@@ -45,6 +45,12 @@ dependencies:
   # Persist user preferences (e.g. language)
   shared_preferences: ^2.2.0
 
+  # GPU fragment-shader effects (glow, aurora, waves) + a process-wide compiled
+  # shader cache. Sampled at a frozen time by the studio's background painter,
+  # so every generated background is a still image, never an animation.
+  # Dart >=3.0 / Flutter >=3.10 — compatible with this project's SDK.
+  flutter_shaders_ui: ^1.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -52,6 +58,15 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Studio background shaders (lib/studio). Compiled at build time by the
+  # Flutter tool; loaded once at runtime via StudioShaders.warmUp().
+  shaders:
+    - shaders/mesh_gradient.frag
+    - shaders/light_rays.frag
+    - shaders/soft_waves.frag
+    - shaders/bokeh.frag
+    - shaders/texture_overlay.frag
 
   assets:
     - assets/images/

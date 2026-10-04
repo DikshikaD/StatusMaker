@@ -1,12 +1,19 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:status_maker/core/supabase/supabase_config.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/features/editor/data/status_design.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
+
+/// Why the last read failed, so screens can say something more useful than
+/// "something went wrong" — a server that can't be reached (no connectivity,
+/// or the project paused / renamed) is a different problem from a query error.
+enum BackendFailure { none, unreachable, timeout, error }
 
 /// Thrown when a backend action can't run (e.g. Supabase not configured, no
 /// session, or a network/permission error). The UI shows [message] in a snackbar.
@@ -28,6 +35,18 @@ class StatusRepositoryException implements Exception {
 ///   4. Insert a row (is_public=false on Save) — or update it on Post/re-save.
 ///   5. Post flips is_public=true so it appears on the public Home feed.
 class StatusRepository {
+  /// Upper bound on any read. The auth client retries an expired-token
+  /// refresh almost indefinitely while offline (gotrue: 999 attempts, up to
+  /// 10 s apart), and a PostgREST query waits on that refresh — so without
+  /// a bound a feed load on a phone with no signal never completes and the
+  /// screen shimmers forever. Ten seconds is long enough for a slow mobile
+  /// connection and short enough that the Retry state appears while the user
+  /// is still looking.
+  static const Duration readTimeout = Duration(seconds: 10);
+
+  /// Set by every read path; `none` after a success.
+  static BackendFailure lastFailure = BackendFailure.none;
+
   static const _table = 'statuses';
   static const _likesTable = 'likes';
   static const _assetsBucket = 'status-assets';
@@ -43,6 +62,46 @@ class StatusRepository {
     final ok = await SupabaseService.ensureReady();
     if (!ok || SupabaseService.userId == null) {
       throw StatusRepositoryException(SupabaseService.statusMessage);
+    }
+  }
+
+  /// [SupabaseService.ensureReady] bounded by [readTimeout]. Reads treat a
+  /// timeout as "not ready" (the caller surfaces its own error / retry state)
+  /// rather than waiting out the auth client's retry loop.
+  ///
+  /// Preceded by a DNS reachability check: with no connectivity at all the
+  /// lookup fails in milliseconds, so the Retry state appears at once instead
+  /// of after the full timeout. A flaky-but-connected network passes the check
+  /// and falls through to the normal bounded wait.
+  Future<bool> _readyWithin() async {
+    if (!await _hostReachable()) {
+      lastFailure = BackendFailure.unreachable;
+      return false;
+    }
+    final ready = await SupabaseService.ensureReady()
+        .timeout(readTimeout, onTimeout: () => false);
+    lastFailure = ready ? BackendFailure.none : BackendFailure.timeout;
+    return ready;
+  }
+
+  /// Classifies an exception from a query and records it.
+  void _recordFailure(Object e) {
+    lastFailure = e is TimeoutException
+        ? BackendFailure.timeout
+        : (lastFailure == BackendFailure.unreachable
+            ? BackendFailure.unreachable
+            : BackendFailure.error);
+  }
+
+  static Future<bool> _hostReachable() async {
+    try {
+      final host = Uri.parse(SupabaseConfig.url).host;
+      if (host.isEmpty) return false;
+      final addresses = await InternetAddress.lookup(host)
+          .timeout(const Duration(seconds: 3));
+      return addresses.isNotEmpty;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -140,7 +199,7 @@ class StatusRepository {
 
   /// Public feed for the Home tab, newest first, optionally filtered by category.
   Future<List<SavedStatus>> fetchPublic({String? category, int limit = 60}) async {
-    if (!await SupabaseService.ensureReady()) return const [];
+    if (!await _readyWithin()) throw StatusRepositoryException('Couldn\'t load the feed.');
     try {
       var query = _db.from(_table).select().eq('is_public', true);
       if (category != null && category.isNotEmpty) {
@@ -148,11 +207,14 @@ class StatusRepository {
       }
       final rows = await query
           .order('created_at', ascending: false)
-          .limit(limit);
+          .limit(limit)
+          .timeout(readTimeout);
+      lastFailure = BackendFailure.none;
       return (rows as List)
           .map((r) => SavedStatus.fromRow((r as Map).cast<String, dynamic>()))
           .toList();
     } catch (e) {
+      _recordFailure(e);
       debugPrint('StatusRepository.fetchPublic failed: $e');
       throw StatusRepositoryException('Couldn\'t load the feed.');
     }
@@ -160,8 +222,8 @@ class StatusRepository {
 
   /// The current user's own creations for the "My Creations" tab, newest first.
   Future<List<SavedStatus>> fetchMine({int limit = 100}) async {
-    if (!await SupabaseService.ensureReady() || SupabaseService.userId == null) {
-      return const [];
+    if (!await _readyWithin() || SupabaseService.userId == null) {
+      throw StatusRepositoryException('Couldn\'t load your creations.');
     }
     try {
       final rows = await _db
@@ -169,7 +231,8 @@ class StatusRepository {
           .select()
           .eq('user_id', SupabaseService.userId!)
           .order('created_at', ascending: false)
-          .limit(limit);
+          .limit(limit)
+          .timeout(readTimeout);
       return (rows as List)
           .map((r) => SavedStatus.fromRow((r as Map).cast<String, dynamic>()))
           .toList();
@@ -184,10 +247,14 @@ class StatusRepository {
   /// found" instead of throwing. Used to open the status a push notification
   /// (e.g. "someone liked your status") points at.
   Future<SavedStatus?> fetchById(String id) async {
-    if (!await SupabaseService.ensureReady()) return null;
+    if (!await _readyWithin()) return null;
     try {
-      final row =
-          await _db.from(_table).select().eq('id', id).maybeSingle();
+      final row = await _db
+          .from(_table)
+          .select()
+          .eq('id', id)
+          .maybeSingle()
+          .timeout(readTimeout);
       if (row == null) return null;
       return SavedStatus.fromRow((row as Map).cast<String, dynamic>());
     } catch (e) {
@@ -211,8 +278,7 @@ class StatusRepository {
   /// fine, nothing liked". Callers use that to avoid caching a failed read as
   /// "this user has no likes" for the rest of the session.
   Future<List<String>?> fetchLikedIds({int limit = 200}) async {
-    if (!await SupabaseService.ensureReady() ||
-        SupabaseService.userId == null) {
+    if (!await _readyWithin() || SupabaseService.userId == null) {
       return null;
     }
     try {
@@ -221,7 +287,8 @@ class StatusRepository {
           .select('status_id')
           .eq('user_id', SupabaseService.userId!)
           .order('created_at', ascending: false)
-          .limit(limit);
+          .limit(limit)
+          .timeout(readTimeout);
       return (rows as List)
           .map((r) => (r as Map)['status_id'] as String)
           .toList();
@@ -267,7 +334,11 @@ class StatusRepository {
     final ids = await fetchLikedIds(limit: limit);
     if (ids == null || ids.isEmpty) return const [];
     try {
-      final rows = await _db.from(_table).select().inFilter('id', ids);
+      final rows = await _db
+          .from(_table)
+          .select()
+          .inFilter('id', ids)
+          .timeout(readTimeout);
       final byId = <String, SavedStatus>{};
       for (final r in rows as List) {
         final status =

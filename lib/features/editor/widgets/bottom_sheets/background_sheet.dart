@@ -6,6 +6,8 @@ import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/background_images.dart';
 import 'package:status_maker/features/editor/data/remote_backgrounds.dart';
 import 'package:status_maker/core/utils/responsive.dart';
+import 'package:status_maker/studio/background/background_presets.dart';
+import 'package:status_maker/studio/presentation/studio_background_sheet.dart';
 
 /// Built-in backgrounds — solid colours and gradients. No assets needed.
 const List<BackgroundState> kBackgroundPresets = [
@@ -172,6 +174,21 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
         _grid([
           for (final path in backgroundImagesForCategory(widget.category))
             _assetTile(path),
+        ]),
+        SizedBox(height: 20.h),
+        // Generated studio backgrounds matched to the editor's category —
+        // painted recipes, so they cost no download and export at full
+        // resolution. Each tile is a cached thumbnail (BackgroundThumb).
+        _sectionHeader(S.t('designer_backgrounds')),
+        _grid([
+          for (final p in backgroundPresetsForLegacyCategory(widget.category))
+            StudioBackgroundTile(
+              state: p.toState(),
+              onTap: () {
+                widget.onSelect(p.toState());
+                Navigator.of(context).pop();
+              },
+            ),
         ]),
         SizedBox(height: 20.h),
         // Solid colours & gradients (the currently available presets).

@@ -5,7 +5,6 @@ import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/features/category/presentation/category_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
-import 'package:status_maker/features/editor/widgets/ready_templates_section.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
 class CreateScreen extends StatelessWidget {
@@ -23,12 +22,10 @@ class CreateScreen extends StatelessWidget {
     );
   }
 
-  /// A lazy [ListView.builder] rather than a SingleChildScrollView + Column.
-  /// This tab sits in an IndexedStack, so it is built at launch whether or not
-  /// the user opens it — and the Ready Templates rows below mount a live
-  /// preview canvas per card. Building them eagerly would pay that cost before
-  /// the first screen is even shown. Same reasoning as ExploreScreen's idle
-  /// view, which hosts the identical section.
+  /// The Create tab: the editor banner and the Themes grid. Every design —
+  /// generated and hand-authored — lives behind its theme (CategoryScreen),
+  /// so the tab itself stays light and loads instantly. The Ready Templates
+  /// rows remain on the Explore tab's idle view.
   Widget _buildBody(BuildContext context) {
     final items = <Widget>[
       _buildAIBlock(context),
@@ -39,10 +36,6 @@ class CreateScreen extends StatelessWidget {
       ),
       SizedBox(height: AppDimensions.paddingMedium),
       _buildThemeGrid(context),
-      SizedBox(height: AppDimensions.paddingXLarge),
-      // The designed starting points, browsable right here rather than only
-      // behind a theme tap.
-      ...const ReadyTemplatesSection().items(context),
       SizedBox(height: AppDimensions.paddingLarge),
     ];
 
@@ -136,6 +129,16 @@ class CreateScreen extends StatelessWidget {
       {'icon': Icons.favorite_outline, 'name': 'Love', 'tint': Colors.red},
       {'icon': Icons.wb_sunny_outlined, 'name': 'Morning', 'tint': Colors.blue},
       {'icon': Icons.business_center_outlined, 'name': 'Business', 'tint': Colors.blueGrey},
+      // Themes added with the generated-template studio (lib/studio). Each
+      // opens the same CategoryScreen, which lists that category's generated
+      // designs — see studioCategoryForTheme().
+      {'icon': Icons.emoji_events_outlined, 'name': 'Success', 'tint': Colors.amber},
+      {'icon': Icons.people_outline, 'name': 'Friendship', 'tint': Colors.teal},
+      {'icon': Icons.card_giftcard_outlined, 'name': 'Wishes', 'tint': Colors.deepPurple},
+      {'icon': Icons.park_outlined, 'name': 'Nature', 'tint': Colors.green},
+      {'icon': Icons.heart_broken_outlined, 'name': 'Heartbreak', 'tint': Colors.blueGrey},
+      {'icon': Icons.crop_square_outlined, 'name': 'Minimal', 'tint': Colors.grey},
+      {'icon': Icons.dark_mode_outlined, 'name': 'Dark', 'tint': Colors.indigo},
     ];
 
     return GridView.builder(
