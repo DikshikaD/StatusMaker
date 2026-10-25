@@ -8,9 +8,22 @@ plugins {
     id "com.google.gms.google-services"
 }
 
+// Release signing: reads android/key.properties (gitignored).
+// A release build WITHOUT it used to fall back to the debug key, which Play
+// rejects — and which is easy to upload by mistake. Release tasks now fail
+// loudly instead (see the taskGraph check below); debug builds are unaffected.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     namespace = "com.appbedev.statusmaker"
-    compileSdk = flutter.compileSdkVersion
+    // Play requires new apps and updates to target Android 16 (API 36).
+    // Pinned instead of flutter.targetSdkVersion, which lags behind on the
+    // Flutter version this project builds with (it produced 35).
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -29,18 +42,46 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // Firebase Messaging needs API 23+. Kept as a floor rather than a fixed
         // value so a future Flutter upgrade can still raise it.
-        minSdk = Math.max(flutter.minSdkVersion, 23)
-        targetSdk = flutter.targetSdkVersion
+        minSdk = Math.max(flutter.minSdkVersion, 24)
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+                storeFile file(keystoreProperties["storeFile"])
+                storePassword keystoreProperties["storePassword"]
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            // Debug key only as a placeholder so the project still configures
+            // without key.properties; the guard below stops any release build
+            // from actually using it.
+            signingConfig = keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def building = graph.allTasks.any { it.project == project && it.name ==~ /(assemble|bundle|package)Release/ }
+    if (building && !keystorePropertiesFile.exists()) {
+        throw new GradleException(
+            "android/key.properties is missing, so this release build would be " +
+            "signed with the DEBUG key and rejected by Google Play. Create it " +
+            "(storePassword, keyPassword, keyAlias, storeFile) and rebuild.")
+    }
+    if (building && keystorePropertiesFile.exists() &&
+            !file(keystoreProperties["storeFile"]).exists()) {
+        throw new GradleException(
+            "The keystore named in android/key.properties does not exist: " +
+            file(keystoreProperties["storeFile"]))
     }
 }
 

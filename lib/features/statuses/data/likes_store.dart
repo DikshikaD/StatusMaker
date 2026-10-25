@@ -65,6 +65,16 @@ class LikesStore extends ChangeNotifier {
     }
   }
 
+  /// Forgets everything — the account these likes belonged to is gone.
+  void reset() {
+    _liked.clear();
+    _counts.clear();
+    _pending.clear();
+    _loaded = false;
+    _loading = null;
+    notifyListeners();
+  }
+
   /// Records the counts a fetch just returned, so the display starts from server
   /// truth (the DB trigger maintains `likes_count`) rather than a stale local
   /// adjustment.

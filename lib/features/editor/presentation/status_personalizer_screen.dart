@@ -212,10 +212,31 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   }
 
   // ---- actions --------------------------------------------------------------
+  /// image_picker throws (rather than returning null) on a denied permission
+  /// or a second pick while one is open. Treat that as "nothing picked" and
+  /// say so, instead of letting it escape as an unhandled error.
+  Future<XFile?> _pickGallery({
+    int? imageQuality,
+    double? maxWidth,
+    double? maxHeight,
+  }) async {
+    try {
+      return await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: imageQuality,
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
+      );
+    } catch (e) {
+      debugPrint('pickImage failed: $e');
+      _fail(S.t('photo_pick_failed'));
+      return null;
+    }
+  }
+
   Future<void> _pickImage() async {
     final x =
-        await _picker.pickImage(
-            source: ImageSource.gallery,
+        await _pickGallery(
             imageQuality: 90,
             // Downscale huge camera photos on pick: a status never needs more
             // than ~1080p, and this slashes decode memory and file size.
@@ -235,15 +256,19 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
 
   Future<void> _replaceImage(String id) async {
     final x =
-        await _picker.pickImage(
-            source: ImageSource.gallery,
+        await _pickGallery(
             imageQuality: 90,
             // Downscale huge camera photos on pick: a status never needs more
             // than ~1080p, and this slashes decode memory and file size.
             maxWidth: 1920,
             maxHeight: 1920);
     if (!mounted) return;
-    if (x != null) _controller.fillImage(id, x.path);
+    if (x == null) return;
+    _controller.fillImage(id, x.path);
+    // Straight into pan/zoom: the automatic centred crop rarely frames a
+    // face well inside a heart or circle, and the Adjust button was easy to
+    // miss. Done keeps the default crop.
+    await _adjustPhoto(id);
   }
 
   /// Opens the pan/zoom adjuster for [id]'s photo — lets the user fix a crop
@@ -309,8 +334,7 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         onSelect: _controller.setBackground,
         onPickGallery: () async {
           Navigator.of(context).pop();
-          final x = await _picker.pickImage(
-              source: ImageSource.gallery,
+          final x = await _pickGallery(
               imageQuality: 90,
               maxWidth: 1920,
               maxHeight: 1920);
@@ -378,6 +402,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         path: await writeTempPng(bytes),
         target: target,
       );
+    } catch (e) {
+      debugPrint('share failed: $e');
+      _fail(S.t('share_failed'));
     } finally {
       _exporting = false;
       if (mounted) setState(() => _busy = false);
@@ -394,7 +421,13 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       final bytes = await _capture();
       if (bytes == null) return;
       // 1) Keep the existing device export (silent — the cloud save reports).
-      await saveToFile(bytes);
+      try {
+        await saveToFile(bytes);
+      } catch (e) {
+        // Best-effort local copy; the cloud save below is what the user is
+        // told about, so a full disk here mustn't abort it silently.
+        debugPrint('local export failed: $e');
+      }
       // 2) Persist the editable design to the cloud (private).
       final ok = await _cloudSave(bytes: bytes, makePublic: false);
       // Drop the loader before navigating, so the editor slides away clean
@@ -510,7 +543,8 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
           if (didPop) return; // canPop was true — nothing to guard
           final leave = await _confirmExit();
           if (!leave || !mounted) return;
-          Navigator.of(context).pop();
+          // this.context: the State's own, which is what `mounted` guards.
+          Navigator.of(this.context).pop();
         },
         child: child!,
       ),

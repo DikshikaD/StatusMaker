@@ -311,13 +311,21 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
 
   // ---- photo (fixed slot only) ----------------------------------------------
   Future<String?> _pickPhoto() async {
-    final x = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 90,
-      maxWidth: 1920,
-      maxHeight: 1920,
-    );
-    return x?.path;
+    try {
+      final x = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 90,
+        maxWidth: 1920,
+        maxHeight: 1920,
+      );
+      return x?.path;
+    } catch (e) {
+      // Denied permission / a second pick while one is open throw rather
+      // than return null.
+      debugPrint('pickImage failed: $e');
+      _fail(S.t('photo_pick_failed'));
+      return null;
+    }
   }
 
   /// Fills the template's designed slot — the photo always lands exactly
@@ -326,7 +334,8 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     final proto = _t.photo;
     if (proto == null) return;
     final path = await _pickPhoto();
-    if (path == null) return;
+    // Android can destroy this screen while the gallery is foregrounded.
+    if (path == null || !mounted) return;
     _edit(() {
       _photo = (_photo ?? proto.copyWith()).copyWith(
         path: path,
@@ -336,6 +345,8 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
         photoScale: 1.0,
       );
     });
+    // Let the user frame the new photo inside its shape right away.
+    await _adjustPhoto();
   }
 
   /// Pan/zoom the picture *inside* its fixed shape — the slot itself never
@@ -422,6 +433,9 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
         path: await writeTempPng(bytes),
         target: target,
       );
+    } catch (e) {
+      debugPrint('share failed: $e');
+      _fail(S.t('share_failed'));
     } finally {
       _exporting = false;
       if (mounted) setState(() => _busy = false);
@@ -436,7 +450,13 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     try {
       final bytes = await _capture();
       if (bytes == null) return;
-      await saveToFile(bytes);
+      try {
+        await saveToFile(bytes);
+      } catch (e) {
+        // Best-effort local copy; the cloud save below is what the user is
+        // told about, so a full disk here mustn't abort it silently.
+        debugPrint('local export failed: $e');
+      }
       final ok = await _cloudSave(bytes: bytes, makePublic: false);
       if (ok) AppNav.goToMyCreations();
     } finally {
@@ -536,7 +556,8 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
         if (didPop) return; // canPop was true — nothing to guard
         final leave = await _confirmExit();
         if (!leave || !mounted) return;
-        Navigator.of(context).pop();
+        // this.context: the State's own, which is what `mounted` guards.
+        Navigator.of(this.context).pop();
       },
       child: _body(reserved),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:status_maker/core/notifications/push_service.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/localization/strings.dart';
@@ -43,11 +44,17 @@ class _MainLayoutState extends State<MainLayout> {
   void initState() {
     super.initState();
     AppNav.request.addListener(_onNavRequest);
+    // After the first frame, so a notification tap that launched the app opens
+    // its status on top of a fully built shell.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) PushService.shellMounted(true);
+    });
   }
 
   @override
   void dispose() {
     AppNav.request.removeListener(_onNavRequest);
+    PushService.shellMounted(false);
     _index.dispose();
     _homeTick.dispose();
     _creationsTick.dispose();

@@ -804,7 +804,14 @@ class EditorController extends ChangeNotifier {
     final i = _images.indexWhere((e) => e.id == id);
     if (i != -1) {
       _checkpoint();
-      _images[i] = _images[i].copyWith(path: path, isPlaceholder: false);
+      // A new photo starts from the default cover crop; the previous photo's
+      // pan/zoom would frame the wrong part of a different picture.
+      _images[i] = _images[i].copyWith(
+        path: path,
+        isPlaceholder: false,
+        photoOffset: Offset.zero,
+        photoScale: 1.0,
+      );
       _imagesView = null;
       notifyListeners();
     }

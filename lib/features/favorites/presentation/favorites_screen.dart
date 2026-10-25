@@ -10,6 +10,7 @@ import 'package:status_maker/shared/widgets/saved_status_card.dart';
 import 'package:status_maker/shared/widgets/confirm_dialog.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
 import 'package:status_maker/features/statuses/data/likes_store.dart';
+import 'package:status_maker/features/moderation/moderation_store.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
@@ -120,11 +121,18 @@ class _LikedTabState extends State<_LikedTab>
   void initState() {
     super.initState();
     LikesStore.instance.addListener(_onLikesChanged);
+    ModerationStore.instance.addListener(_onModerationChanged);
+    ModerationStore.instance.ensureLoaded();
     _load();
+  }
+
+  void _onModerationChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    ModerationStore.instance.removeListener(_onModerationChanged);
     LikesStore.instance.removeListener(_onLikesChanged);
     super.dispose();
   }
@@ -218,7 +226,9 @@ class _LikedTabState extends State<_LikedTab>
         onAction: _load,
       );
     }
-    if (_statuses.isEmpty) {
+    // Posts the user reported / hid / blocked stay out of Saved too.
+    final shown = ModerationStore.instance.visible(_statuses);
+    if (shown.isEmpty) {
       return EmptyState(
         icon: Icons.bookmark_border,
         title: S.t('fav_empty_title'),
@@ -233,11 +243,11 @@ class _LikedTabState extends State<_LikedTab>
         physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics()),
         padding: EdgeInsets.all(AppDimensions.paddingMedium),
-        itemCount: _statuses.length,
+        itemCount: shown.length,
         separatorBuilder: (_, __) =>
             SizedBox(height: AppDimensions.paddingLarge),
         itemBuilder: (context, i) {
-          final status = _statuses[i];
+          final status = shown[i];
           return RepaintBoundary(
             child: SavedStatusCard(
               status: status,

@@ -158,6 +158,8 @@ class S {
     'time_days_ago': ['{n} days ago', '{n} दिन पहले'],
     'version': ['Version', 'वर्शन'],
     'rate_us': ['Rate us', 'हमें रेट करें'],
+    'privacy_policy': ['Privacy Policy', 'गोपनीयता नीति'],
+    'terms_conditions': ['Terms & Conditions', 'नियम और शर्तें'],
     'share_app': ['Share app', 'ऐप शेयर करें'],
     'share_app_msg': [
       'Create beautiful statuses with Status Maker — get the app:',
@@ -237,6 +239,8 @@ class S {
     'skip': ['Skip', 'छोड़ें'],
     'choose_style': ['Choose your style', 'अपनी स्टाइल चुनें'],
 
+    'onb_chip_text': ['Text', 'टेक्स्ट'],
+    'onb_chip_color': ['Color', 'रंग'],
     // onboarding — 3 steps
     'onb1_title': ['Ready-made designs', 'तैयार डिज़ाइन'],
     'onb1_desc': [
@@ -303,6 +307,14 @@ class S {
       'Couldn\'t save. Please try again.',
       'सेव नहीं हो सका। कृपया फिर से प्रयास करें।'
     ],
+    'share_failed': [
+      'Couldn\'t share. Please try again.',
+      'शेयर नहीं हो सका। कृपया फिर से प्रयास करें।'
+    ],
+    'photo_pick_failed': [
+      'Couldn\'t open your photos. Please try again.',
+      'फ़ोटो नहीं खुल सकीं। कृपया फिर से प्रयास करें।'
+    ],
     'delete_failed': [
       'Couldn\'t delete. Please try again.',
       'डिलीट नहीं हो सका। कृपया फिर से प्रयास करें।'
@@ -318,6 +330,43 @@ class S {
       'कृपया थोड़ी देर बाद फिर से प्रयास करें।'
     ],
     'deleted_ok': ['Deleted', 'डिलीट हो गया'],
+
+    // moderation — report / hide / block other people's posts
+    'report_post': ['Report this post', 'इस पोस्ट की रिपोर्ट करें'],
+    'hide_post': ['Hide this post', 'यह पोस्ट छिपाएँ'],
+    'block_creator': ['Block this creator', 'इस क्रिएटर को ब्लॉक करें'],
+    'report_why': ['Why are you reporting this?', 'आप इसकी रिपोर्ट क्यों कर रहे हैं?'],
+    'report_spam': ['Spam or misleading', 'स्पैम या भ्रामक'],
+    'report_sexual': ['Nudity or sexual content', 'अश्लील या यौन सामग्री'],
+    'report_hate': ['Hate or harassment', 'नफ़रत या उत्पीड़न'],
+    'report_violence': ['Violence or dangerous content', 'हिंसा या ख़तरनाक सामग्री'],
+    'report_other': ['Something else', 'कुछ और'],
+    'report_thanks': [
+      'Thanks — we\'ll review it. The post is now hidden for you.',
+      'धन्यवाद — हम इसकी समीक्षा करेंगे। यह पोस्ट अब आपके लिए छिपी है।'
+    ],
+    'report_failed': [
+      'Couldn\'t send the report. Please try again.',
+      'रिपोर्ट नहीं भेजी जा सकी। कृपया फिर से प्रयास करें।'
+    ],
+    'post_hidden': ['Post hidden', 'पोस्ट छिपा दी गई'],
+    'creator_blocked': [
+      'You won\'t see posts from this creator',
+      'अब आपको इस क्रिएटर की पोस्ट नहीं दिखेंगी'
+    ],
+
+    // settings — delete my data
+    'delete_my_data': ['Delete my data', 'मेरा डेटा हटाएँ'],
+    'delete_my_data_title': ['Delete all your data?', 'अपना सारा डेटा हटाएँ?'],
+    'delete_my_data_msg': [
+      'This permanently removes every status you created or posted, your likes and your notifications. It can\'t be undone.',
+      'इससे आपके बनाए या पोस्ट किए सभी स्टेटस, लाइक और नोटिफ़िकेशन हमेशा के लिए हट जाएँगे। इसे वापस नहीं किया जा सकता।'
+    ],
+    'delete_my_data_ok': ['Your data was deleted', 'आपका डेटा हटा दिया गया'],
+    'delete_my_data_failed': [
+      'Couldn\'t delete your data. Check your connection and try again.',
+      'डेटा नहीं हटाया जा सका। कनेक्शन जाँचकर फिर से प्रयास करें।'
+    ],
     'cancel': ['Cancel', 'रद्द करें'],
     'discard': ['Discard', 'छोड़ दें'],
     'discard_changes_title': ['Discard Changes?', 'बदलाव छोड़ दें?'],
@@ -388,8 +437,8 @@ class S {
     'adjust': ['Adjust', 'एडजस्ट'],
     'reposition_photo': ['Reposition Photo', 'फ़ोटो पुनः स्थिति'],
     'reposition_hint': [
-      'Drag to move • Pinch to zoom',
-      'खिसकाने के लिए ड्रैग करें • ज़ूम के लिए पिंच करें'
+      'Drag to move • Pinch or slide to zoom • Double-tap to reset',
+      'खिसकाने के लिए ड्रैग करें • ज़ूम के लिए पिंच या स्लाइड करें • रीसेट के लिए दो बार टैप करें'
     ],
     'reset': ['Reset', 'रीसेट'],
     'done': ['Done', 'हो गया'],

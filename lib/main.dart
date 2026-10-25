@@ -3,11 +3,14 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/theme/app_theme.dart';
 import 'package:status_maker/core/theme/theme_controller.dart';
+import 'package:status_maker/core/utils/app_navigation.dart';
+import 'package:status_maker/core/utils/first_run.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/notifications/push_service.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
+import 'package:status_maker/features/home/presentation/main_layout.dart';
 import 'package:status_maker/features/splash/presentation/splash_screen.dart';
 import 'package:status_maker/studio/shaders/studio_shaders.dart';
 
@@ -17,6 +20,7 @@ Future<void> main() async {
   // These are tiny, fast SharedPreferences reads.
   await S.init();
   await ThemeController.init();
+  await FirstRun.init();
   runApp(const MyApp());
 
   // Connect to the backend and ensure a (anonymous) session — deliberately
@@ -80,7 +84,27 @@ class MyApp extends StatelessWidget {
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,
               ],
-              home: const SplashScreen(),
+              // Returning users go straight to the shell; the language
+              // picker + onboarding are a first-run step only.
+              // Not `home:` — it asserts against onGenerateInitialRoutes. This
+              // still gives MaterialApp a Navigator; the app pushes no names.
+              onGenerateRoute: (_) => MaterialPageRoute<void>(
+                builder: (_) => const SplashScreen(),
+              ),
+              // Only consulted once, at startup. The shell route carries the
+              // same name onboarding gives it, so AppNav can pop back to it.
+              onGenerateInitialRoutes: (_) => [
+                if (FirstRun.done)
+                  MaterialPageRoute<void>(
+                    settings:
+                        const RouteSettings(name: AppNav.shellRouteName),
+                    builder: (_) => const MainLayout(),
+                  )
+                else
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SplashScreen(),
+                  ),
+              ],
             );
           },
         );

@@ -12,6 +12,7 @@ import 'package:status_maker/features/explore/presentation/explore_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
 import 'package:status_maker/features/preview/presentation/template_detail_screen.dart';
 import 'package:status_maker/features/statuses/data/likes_store.dart';
+import 'package:status_maker/features/moderation/moderation_store.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
@@ -39,35 +40,78 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final StatusRepository _repo = StatusRepository();
 
+  final ScrollController _scroll = ScrollController();
+
   String? _selected;
   List<SavedStatus> _statuses = [];
   bool _loading = true;
   bool _failed = false;
 
+  /// A background refresh of the first page is in flight (tab focus, pull to
+  /// refresh, back from the editor). The feed stays on screen meanwhile.
+  bool _refreshing = false;
+
+  // Pagination: the next page is fetched as the user nears the end.
+  bool _hasMore = true;
+  bool _loadingMore = false;
+  bool _moreFailed = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _scroll.addListener(_onScroll);
     widget.refreshSignal?.addListener(_onFocus);
+    ModerationStore.instance.addListener(_onModerationChanged);
+    ModerationStore.instance.ensureLoaded();
+  }
+
+  /// A post was reported / hidden or a creator blocked — redraw without it.
+  void _onModerationChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    ModerationStore.instance.removeListener(_onModerationChanged);
     widget.refreshSignal?.removeListener(_onFocus);
+    _scroll.dispose();
     super.dispose();
   }
 
   /// Called when the Home tab regains focus — silently refresh the feed.
   void _onFocus() {
-    if (mounted && !_loading) _load();
+    if (mounted && !_loading) _load(silent: true);
+  }
+
+  /// Start the next page about a screen before the end, so it has usually
+  /// landed by the time the user gets there.
+  void _onScroll() {
+    final pos = _scroll.position;
+    if (pos.extentAfter < pos.viewportDimension) _loadMore();
   }
 
   /// Loads the PUBLIC feed (only creations users chose to Post), filtered by
   /// the selected category chip.
-  Future<void> _load() async {
+  /// Bumped per [_load]; a response is only applied if it's still the latest,
+  /// so a slow "Love" reply can't land after a fast "All" one and show Love
+  /// posts under the All chip.
+  int _loadSeq = 0;
+
+  ///
+  /// [silent] keeps the current feed on screen (no shimmer) and merges the
+  /// fresh first page into it, so the scroll position and the pages already
+  /// loaded survive. With nothing loaded yet it behaves like a normal load.
+  Future<void> _load({bool silent = false}) async {
+    final seq = ++_loadSeq;
+    silent = silent && _statuses.isNotEmpty && !_failed;
     setState(() {
-      _loading = true;
+      _loading = !silent;
+      _refreshing = silent;
       _failed = false;
+      // Any in-flight page belongs to the old feed; its result is dropped.
+      _loadingMore = false;
+      _moreFailed = false;
     });
     try {
       // Which of these the user has already liked, so the hearts are right on
@@ -78,24 +122,96 @@ class _HomeScreenState extends State<HomeScreen> {
       final likes = LikesStore.instance.ensureLoaded();
       final items = await _repo.fetchPublic(category: _selected);
       await likes;
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       // Seed the counts from server truth before showing them.
       LikesStore.instance.syncFromRows(items);
+      final merged = silent ? _mergeFirstPage(items) : null;
       setState(() {
-        _statuses = items;
+        if (merged != null) {
+          _statuses = merged;
+        } else {
+          _statuses = items;
+          _hasMore = items.length == StatusRepository.feedPageSize;
+        }
         _loading = false;
+        _refreshing = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || seq != _loadSeq) return;
       setState(() {
-        _failed = true;
+        // A failed background refresh leaves the feed the user is reading.
+        _failed = !silent;
         _loading = false;
+        _refreshing = false;
       });
     }
   }
 
+  /// Puts a freshly fetched first page on top of the posts already loaded:
+  /// [fresh] is authoritative down to its oldest post (new posts appear,
+  /// deleted ones go, counts update) and everything older is kept as is.
+  ///
+  /// Returns null when the two don't overlap — more than a page was posted
+  /// since — because keeping the old pages would leave a hole between them;
+  /// the caller then starts over from [fresh].
+  List<SavedStatus>? _mergeFirstPage(List<SavedStatus> fresh) {
+    if (fresh.length < StatusRepository.feedPageSize) return null;
+    final known = {for (final s in _statuses) s.id};
+    if (!fresh.any((s) => known.contains(s.id))) return null;
+    final cutoff = fresh.last.createdAt;
+    if (cutoff == null) return null;
+    final freshIds = {for (final s in fresh) s.id};
+    return [
+      ...fresh,
+      for (final s in _statuses)
+        if (!freshIds.contains(s.id) &&
+            s.createdAt != null &&
+            s.createdAt!.isBefore(cutoff))
+          s,
+    ];
+  }
+
+  /// Appends the next page, keyed off the oldest post already shown.
+  Future<void> _loadMore() async {
+    if (_loading || _refreshing || _loadingMore || _moreFailed || !_hasMore) {
+      return;
+    }
+    final cursor = _statuses.isEmpty ? null : _statuses.last.createdAt;
+    if (cursor == null) return;
+    final seq = _loadSeq;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await _repo.fetchPublic(category: _selected, before: cursor);
+      if (!mounted || seq != _loadSeq) return;
+      LikesStore.instance.syncFromRows(page);
+      final known = {for (final s in _statuses) s.id};
+      setState(() {
+        _statuses = [
+          ..._statuses,
+          ...page.where((s) => !known.contains(s.id)),
+        ];
+        _hasMore = page.length == StatusRepository.feedPageSize;
+        _loadingMore = false;
+      });
+    } catch (_) {
+      if (!mounted || seq != _loadSeq) return;
+      // Stays failed until the user taps Retry in the footer — retrying on
+      // every scroll tick would hammer a dead connection.
+      setState(() {
+        _loadingMore = false;
+        _moreFailed = true;
+      });
+    }
+  }
+
+  void _retryMore() {
+    setState(() => _moreFailed = false);
+    _loadMore();
+  }
+
   void _selectCategory(String? name) {
     setState(() => _selected = name);
+    if (_scroll.hasClients) _scroll.jumpTo(0);
     _load();
   }
 
@@ -132,10 +248,16 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: RefreshIndicator(
         color: AppColors.accent,
-        onRefresh: _load,
+        // The indicator is its own progress UI — no shimmer behind it.
+        onRefresh: () => _load(silent: true),
         child: CustomScrollView(
+          controller: _scroll,
           physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics()),
+          // Build a screen ahead (the default is 250px, less than a card), so
+          // the next thumbnail is already downloading/decoding before it
+          // scrolls into view instead of popping in under the user's thumb.
+          cacheExtent: MediaQuery.sizeOf(context).height,
           slivers: [
             SliverToBoxAdapter(
               child: Column(
@@ -148,6 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             _buildSliverBody(context),
+            if (!_showsEmptyState && !_loading) _buildFooter(),
             // Bottom breathing room for the feed only. With an empty state
             // showing, the body already fills the remaining viewport, and extra
             // extent below it would make the screen scroll and shift the
@@ -318,19 +441,25 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final tag = _selected == null ? null : S.cat(_selected!);
+    // Paging still runs on the full list (the cursor is its last row); only
+    // what's drawn skips posts the user has hidden or blocked.
+    final shown = ModerationStore.instance.visible(_statuses);
     return SliverPadding(
       padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingMedium),
       sliver: SliverList.separated(
-        itemCount: _statuses.length,
+        itemCount: shown.length,
         separatorBuilder: (_, __) =>
             SizedBox(height: AppDimensions.paddingLarge),
         itemBuilder: (context, i) {
-          final status = _statuses[i];
+          final status = shown[i];
           // Only the owner can delete their post from the feed; the card also
           // swaps Customize → Edit and shows a "Your status" badge for these.
           final isOwn = status.userId != null &&
               status.userId == SupabaseService.userId;
           return RepaintBoundary(
+            // Keyed by id so a card's own state (share spinner, press scale)
+            // stays with its post when a refresh inserts new ones above it.
+            key: ValueKey(status.id),
             child: SavedStatusCard(
               status: status,
               tag: tag,
@@ -340,6 +469,36 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  /// Under the last card: a spinner while the next page loads, or Retry if it
+  /// failed. Nothing once the feed is exhausted.
+  Widget _buildFooter() {
+    Widget? child;
+    if (_loadingMore) {
+      child = SizedBox(
+        width: 24.w,
+        height: 24.w,
+        child: const CircularProgressIndicator(
+            strokeWidth: 2.5, color: AppColors.accent),
+      );
+    } else if (_moreFailed) {
+      child = TextButton.icon(
+        onPressed: _retryMore,
+        icon: const Icon(Icons.refresh, color: AppColors.accent),
+        label: Text(
+          S.t('retry'),
+          style: const TextStyle(color: AppColors.accent),
+        ),
+      );
+    }
+    if (child == null) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.only(top: AppDimensions.paddingLarge),
+        child: Center(child: child),
       ),
     );
   }
@@ -393,7 +552,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     ).then((_) {
-      if (mounted && !_loading) _load(); // reflect in-place edits in the feed
+      // Reflect in-place edits in the feed without losing the user's place.
+      if (mounted && !_loading) _load(silent: true);
     });
   }
 }

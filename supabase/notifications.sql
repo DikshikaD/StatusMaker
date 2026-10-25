@@ -339,3 +339,17 @@ $$;
 -- INSERT → Edge Function notify-on-like instead. Pick one path, not both, or
 -- every like will push twice.
 -- ---------------------------------------------------------------------------
+
+-- ---------------------------------------------------------------------------
+-- 7) Lock down internal functions
+--
+-- Postgres grants EXECUTE to PUBLIC on new functions, and PostgREST exposes
+-- every public-schema function to the API. Without this, anyone holding the app's
+-- public key could call push_notification() to push to any user, or
+-- prune_old_notifications() to delete everyone's read notifications. The
+-- triggers still work: they run as the function owner, not as the caller.
+-- ---------------------------------------------------------------------------
+revoke execute on function public.push_notification(public.notifications)
+  from public, anon, authenticated;
+revoke execute on function public.prune_old_notifications()
+  from public, anon, authenticated;

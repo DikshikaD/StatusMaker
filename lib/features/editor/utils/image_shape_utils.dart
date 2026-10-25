@@ -19,6 +19,24 @@ Size baseSizeForImageShape(ImageShape shape) {
   }
 }
 
+/// [shape]'s outline in a box of [size] — the same edge [clipToImageShape]
+/// cuts along, for drawing a guide line around it.
+Path imageShapePath(ImageShape shape, Size size) {
+  final rect = Offset.zero & size;
+  switch (shape) {
+    case ImageShape.square:
+      return Path()..addRect(rect);
+    case ImageShape.roundedRectangle:
+      return Path()
+        ..addRRect(RRect.fromRectAndRadius(rect, const Radius.circular(24)));
+    case ImageShape.circle:
+    case ImageShape.oval:
+      return Path()..addOval(rect);
+    case ImageShape.heart:
+      return HeartClipper().getClip(size);
+  }
+}
+
 /// Clips [child] into [shape]'s outline.
 Widget clipToImageShape(ImageShape shape, Widget child) {
   switch (shape) {

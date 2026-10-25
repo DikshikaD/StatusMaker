@@ -7,6 +7,7 @@ import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
+import 'package:status_maker/features/moderation/post_actions_sheet.dart';
 import 'package:status_maker/features/statuses/data/likes_store.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 import 'package:status_maker/shared/utils/share_image.dart';
@@ -96,6 +97,19 @@ class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
         ),
         title: Text(s.title ?? S.t('preview_title'),
             style: TextStyle(fontSize: 16.sp)),
+        actions: [
+          // Report / hide / block — never on the user's own post.
+          if (s.userId == null || s.userId != SupabaseService.userId)
+            IconButton(
+              icon: const Icon(Icons.more_vert),
+              onPressed: () async {
+                final action = await showPostActionsSheet(context, s);
+                if (action != PostAction.none && context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
+            ),
+        ],
       ),
       body: Column(
         children: [

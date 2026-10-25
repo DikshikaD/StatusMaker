@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
-import 'package:status_maker/core/constants/app_dimensions.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/home/presentation/main_layout.dart';
 import 'package:status_maker/core/utils/app_navigation.dart';
+import 'package:status_maker/core/utils/first_run.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 
@@ -77,6 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 
   void _goToApp() {
+    FirstRun.markDone();
     Navigator.of(context).pushReplacement(
       FadeSlidePageRoute(
         page: const MainLayout(),
@@ -384,12 +385,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           Positioned(
             top: 10.h + bob * 6.h,
             left: 0,
-            child: _chip(Icons.text_fields, 'Text', AppColors.accent),
+            child: _chip(Icons.text_fields, S.t('onb_chip_text'), AppColors.accent),
           ),
           Positioned(
             bottom: 24.h - bob * 6.h,
             left: 6.w,
-            child: _chip(Icons.palette_outlined, 'Color', AppColors.accent),
+            child: _chip(Icons.palette_outlined, S.t('onb_chip_color'), AppColors.accent),
           ),
           Positioned(
             top: 60.h - bob * 5.h,

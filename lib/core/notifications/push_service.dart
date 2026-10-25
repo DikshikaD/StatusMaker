@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/notifications/push_banner.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
@@ -124,10 +125,16 @@ class PushService {
         return;
       }
       // Printed in full and on its own line: this is the value you paste into
-      // Firebase Console to send a test push straight to this device.
-      _log('🎫 FCM TOKEN ↓↓↓');
-      _log(fcmToken);
-      _log('🎫 FCM TOKEN ↑↑↑ (${fcmToken.length} chars)');
+      // Firebase Console to send a test push straight to this device. Debug
+      // builds only — in release it would sit in logcat for any app with log
+      // access to read.
+      if (kDebugMode) {
+        _log('🎫 FCM TOKEN ↓↓↓');
+        _log(fcmToken);
+        _log('🎫 FCM TOKEN ↑↑↑ (${fcmToken.length} chars)');
+      } else {
+        _log('🎫 FCM token received (${fcmToken.length} chars)');
+      }
 
       await _register(fcmToken);
 
@@ -182,6 +189,15 @@ class PushService {
     }
   }
 
+  /// Re-attaches this phone's token to whoever is signed in now — used after
+  /// "Delete my data" swaps the account for a fresh anonymous one.
+  static Future<void> reRegisterForCurrentUser() async {
+    final token = _registeredToken;
+    if (token == null) return;
+    _registeredLang = null; // defeats the "already saved" short-circuit
+    await _register(token);
+  }
+
   /// Stores [token] against the current user, so the Edge Function can find it.
   static Future<void> _register(String? token) async {
     if (token == null || token.isEmpty) {
@@ -207,17 +223,33 @@ class PushService {
     }
 
     try {
-      _log('⏳ saving token to device_tokens for user $userId …');
+      _log('⏳ saving token to device_tokens'
+          '${kDebugMode ? ' for user $userId' : ''} …');
       // Upsert on the token (its primary key): re-registering the same phone
       // updates the row rather than erroring, and a phone that changes hands
       // moves to its new owner instead of keeping the old one's notifications.
+      // `lang` is what the Edge Function words closed-app pushes in.
       final lang = S.lang.value;
-      await SupabaseService.client.from('device_tokens').upsert({
-        'token': token,
-        'user_id': userId,
-        'platform': 'android',
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'token');
+      final platform = Platform.operatingSystem;
+      try {
+        // Preferred path: register_device (supabase/migrations/0002) runs as
+        // the table owner, so it can move a token another account registered
+        // — which the RLS-checked upsert below can't.
+        await SupabaseService.client.rpc('register_device', params: {
+          'p_token': token,
+          'p_platform': platform,
+          'p_lang': lang,
+        });
+      } on PostgrestException catch (e) {
+        _log('ℹ️  register_device unavailable (${e.code}) — plain upsert');
+        await SupabaseService.client.from('device_tokens').upsert({
+          'token': token,
+          'user_id': userId,
+          'platform': platform,
+          'lang': lang,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'token');
+      }
       _registeredToken = token;
       _registeredLang = lang;
       _log('✅ device registered — this phone can now receive push');
@@ -239,8 +271,31 @@ class PushService {
   /// logs and does nothing rather than crashing app launch.
   static const _openableTypes = {'like', 'remix'};
 
+  /// Whether MainLayout is mounted. A tap that cold-starts the app arrives
+  /// while the splash / language picker / onboarding is still up; opening the
+  /// status on top of those would leave back landing on the picker, and the
+  /// editor's "go to My Creations" would have no shell to answer it. Such a tap
+  /// is parked in [_pendingOpen] until the shell reports in.
+  static bool _shellMounted = false;
+  static Map<String, dynamic>? _pendingOpen;
+
+  /// Called by MainLayout as it mounts / unmounts.
+  static void shellMounted(bool mounted) {
+    _shellMounted = mounted;
+    if (mounted && _pendingOpen != null) {
+      final data = _pendingOpen!;
+      _pendingOpen = null;
+      _openFromData(data);
+    }
+  }
+
   static Future<void> _openFromData(Map<String, dynamic> data) async {
     if (!_openableTypes.contains(data['type'])) return;
+    if (!_shellMounted) {
+      _log('⏸️  tap parked until the app shell is up');
+      _pendingOpen = data;
+      return;
+    }
     final statusId = data['status_id'] as String?;
     if (statusId == null || statusId.isEmpty) return;
 

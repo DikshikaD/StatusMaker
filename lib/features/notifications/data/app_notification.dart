@@ -69,6 +69,12 @@ class AppNotification {
 class NotificationRepository {
   static const _table = 'notifications';
 
+  /// [SupabaseService.ensureReady] bounded by [StatusRepository.readTimeout].
+  /// Unbounded, it hangs offline while the auth client retries an expired
+  /// token, and the list never leaves its loading state.
+  static Future<bool> _readyWithin() => SupabaseService.ensureReady()
+      .timeout(StatusRepository.readTimeout, onTimeout: () => false);
+
   /// The embed asks for exactly what the list needs. `design` is included
   /// only to pull the quote out of it (see [AppNotification.quote]).
   static const _columns =
@@ -78,7 +84,7 @@ class NotificationRepository {
 
   /// Newest first. Throws on failure so the screen can show Retry.
   Future<List<AppNotification>> fetch({int limit = 100}) async {
-    if (!await SupabaseService.ensureReady()) {
+    if (!await _readyWithin()) {
       throw StatusRepositoryException('Couldn\'t load notifications.');
     }
     try {
@@ -100,7 +106,7 @@ class NotificationRepository {
   /// How many are unread — drives the badge on the Settings row. Returns 0
   /// rather than throwing: a badge is not worth an error state.
   Future<int> unreadCount() async {
-    if (!await SupabaseService.ensureReady()) return 0;
+    if (!await _readyWithin()) return 0;
     try {
       final count = await SupabaseService.client
           .from(_table)
@@ -118,7 +124,7 @@ class NotificationRepository {
   /// matters to the user, a failed write here just leaves the badge on.
   Future<void> markAllRead() async {
     final uid = SupabaseService.userId;
-    if (uid == null || !await SupabaseService.ensureReady()) return;
+    if (uid == null || !await _readyWithin()) return;
     try {
       await SupabaseService.client
           .from(_table)

@@ -3,6 +3,13 @@ import 'package:share_plus/share_plus.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/notifications/push_service.dart';
+import 'package:status_maker/core/supabase/supabase_service.dart';
+import 'package:status_maker/features/moderation/moderation_store.dart';
+import 'package:status_maker/features/statuses/data/likes_store.dart';
+import 'package:status_maker/features/statuses/data/status_repository.dart';
+import 'package:status_maker/shared/widgets/busy_overlay.dart';
+import 'package:status_maker/shared/widgets/confirm_dialog.dart';
 import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/core/utils/responsive.dart';
@@ -23,6 +30,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const _storeUrl =
       'https://play.google.com/store/apps/details?id=$_packageId';
 
+  /// Hosted legal pages. Also the URLs to give the Play Console / App Store
+  /// listing, so the store and the app point at the same documents.
+  static const _privacyUrl = 'https://claude.ai/artifact/CU2yxf4AxxHZcGkUNdF8Et';
+  static const _termsUrl = 'https://claude.ai/artifact/7ApLa5xCVTPS2Z8JXHvTLQ';
+
+  /// Opens [url] in the browser rather than an in-app view, so the page gets
+  /// the browser's own back button and address bar.
+  Future<void> _openUrl(String url) async {
+    try {
+      if (await launchUrl(Uri.parse(url),
+          mode: LaunchMode.externalApplication)) {
+        return;
+      }
+    } catch (_) {
+      // No browser to handle it — fall through to the error below.
+    }
+    if (mounted) AppSnackBar.error(context, S.t('something_wrong'));
+  }
+
   /// Opens the Play Store listing — in the store app when it's installed
   /// (market://), otherwise the web listing.
   Future<void> _rateUs() async {
@@ -41,6 +67,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Opens the system share sheet with an invite message + store link.
   void _shareApp() => Share.share('${S.t('share_app_msg')}\n$_storeUrl');
+
+  bool _deleting = false;
+
+  /// "Delete my data": confirm, wipe the account's files and rows on the
+  /// server, then continue as a brand-new anonymous user so the app keeps
+  /// working. Required by Play's Data safety policy.
+  Future<void> _deleteMyData() async {
+    if (_deleting) return;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: S.t('delete_my_data_title'),
+      message: S.t('delete_my_data_msg'),
+      confirmLabel: S.t('delete_my_data'),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    try {
+      await StatusRepository().deleteAllMyData();
+      await SupabaseService.resetSession();
+      LikesStore.instance.reset();
+      await ModerationStore.instance.clear();
+      PushService.reRegisterForCurrentUser();
+      if (!mounted) return;
+      setState(() => _unread = 0);
+      AppSnackBar.success(context, S.t('delete_my_data_ok'));
+    } catch (_) {
+      if (mounted) AppSnackBar.error(context, S.t('delete_my_data_failed'));
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
 
   final NotificationRepository _notifications = NotificationRepository();
 
@@ -76,7 +134,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: Text(S.t('settings_title')),
         centerTitle: false,
       ),
-      body: ListView(
+      body: Stack(
+        children: [
+      ListView(
         padding: EdgeInsets.all(20.w),
         children: [
           _sectionTitle(S.t('appearance')),
@@ -111,7 +171,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SizedBox(height: 12.h),
           _row(Icons.star_outline, S.t('rate_us'), onTap: _rateUs),
           _row(Icons.ios_share, S.t('share_app'), onTap: _shareApp),
+          _row(Icons.privacy_tip_outlined, S.t('privacy_policy'),
+              onTap: () => _openUrl(_privacyUrl)),
+          _row(Icons.description_outlined, S.t('terms_conditions'),
+              onTap: () => _openUrl(_termsUrl)),
+          _row(Icons.delete_forever_outlined, S.t('delete_my_data'),
+              onTap: _deleteMyData),
           _row(Icons.info_outline, '${S.t('version')}  1.0.0'),
+        ],
+      ),
+          BusyOverlay(busy: _deleting),
         ],
       ),
     );

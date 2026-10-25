@@ -44,6 +44,11 @@ class StatusRepository {
   /// is still looking.
   static const Duration readTimeout = Duration(seconds: 10);
 
+  /// Upper bound on connecting before a write. Longer than [readTimeout]: a
+  /// write is something the user explicitly asked for, so it's worth waiting
+  /// a little more before giving up — but never indefinitely.
+  static const Duration writeReadyTimeout = Duration(seconds: 20);
+
   /// Set by every read path; `none` after a success.
   static BackendFailure lastFailure = BackendFailure.none;
 
@@ -58,8 +63,24 @@ class StatusRepository {
   /// a failed startup doesn't permanently disable saving. Throws the *actual*
   /// reason (auth disabled, bad key, real network error) rather than a generic
   /// "no internet" message.
+  ///
+  /// Bounded by [writeReadyTimeout] for the same reason reads are bounded (see
+  /// [readTimeout]): offline with an expired token, ensureReady() sits in the
+  /// auth client's refresh-retry loop, and an unbounded wait here left the
+  /// Save spinner — or an optimistic like — pending forever.
   Future<void> _requireReady() async {
-    final ok = await SupabaseService.ensureReady();
+    var timedOut = false;
+    final ok = await SupabaseService.ensureReady().timeout(
+      writeReadyTimeout,
+      onTimeout: () {
+        timedOut = true;
+        return false;
+      },
+    );
+    if (timedOut) {
+      throw StatusRepositoryException(
+          'Couldn\'t connect. Check your internet and try again.');
+    }
     if (!ok || SupabaseService.userId == null) {
       throw StatusRepositoryException(SupabaseService.statusMessage);
     }
@@ -193,17 +214,65 @@ class StatusRepository {
     }
   }
 
+  /// Permanently deletes everything this user has: their files in both storage
+  /// buckets, then (through `delete_my_account`, see migrations/0003) their
+  /// statuses, likes, notifications, device tokens and the account itself.
+  ///
+  /// Files go first and through the Storage API on purpose — removing
+  /// `storage.objects` rows from SQL leaves the stored bytes behind. If any
+  /// step fails nothing is half-reported: the exception reaches the caller and
+  /// the account is only removed by the final RPC.
+  Future<void> deleteAllMyData() async {
+    await _requireReady();
+    final uid = SupabaseService.userId!;
+    try {
+      for (final bucket in [_assetsBucket, _thumbsBucket]) {
+        final files = _db.storage.from(bucket);
+        // Paged, and capped so a policy that silently refuses deletes can't
+        // spin forever on the same page.
+        for (var page = 0; page < 100; page++) {
+          final batch = await files.list(
+            path: uid,
+            searchOptions: const SearchOptions(limit: 1000),
+          );
+          if (batch.isEmpty) break;
+          await files.remove([for (final f in batch) '$uid/${f.name}']);
+          if (batch.length < 1000) break;
+        }
+      }
+      await _db.rpc('delete_my_account');
+    } catch (e) {
+      debugPrint('StatusRepository.deleteAllMyData failed: $e');
+      throw StatusRepositoryException('Couldn\'t delete your data.');
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Reads
   // ---------------------------------------------------------------------------
 
+  /// How many posts the Home feed loads per page.
+  static const int feedPageSize = 10;
+
   /// Public feed for the Home tab, newest first, optionally filtered by category.
-  Future<List<SavedStatus>> fetchPublic({String? category, int limit = 60}) async {
+  ///
+  /// Paged by keyset, not offset: [before] is the `created_at` of the last post
+  /// already shown, so posts published while the user scrolls can't shift the
+  /// window and repeat (or skip) a card the way `range()` would. A page shorter
+  /// than [limit] means the feed has no more.
+  Future<List<SavedStatus>> fetchPublic({
+    String? category,
+    int limit = feedPageSize,
+    DateTime? before,
+  }) async {
     if (!await _readyWithin()) throw StatusRepositoryException('Couldn\'t load the feed.');
     try {
       var query = _db.from(_table).select().eq('is_public', true);
       if (category != null && category.isNotEmpty) {
         query = query.eq('category', category);
+      }
+      if (before != null) {
+        query = query.lt('created_at', before.toUtc().toIso8601String());
       }
       final rows = await query
           .order('created_at', ascending: false)
@@ -307,9 +376,14 @@ class StatusRepository {
     final uid = SupabaseService.userId!;
     try {
       if (liked) {
+        // ignoreDuplicates makes this ON CONFLICT DO NOTHING. A plain upsert
+        // becomes DO UPDATE, and `likes` has no update policy — so re-liking
+        // a status (e.g. one tapped before the liked ids had loaded) failed
+        // RLS and rolled the heart back with an error.
         await _db.from(_likesTable).upsert(
           {'user_id': uid, 'status_id': statusId},
           onConflict: 'user_id,status_id',
+          ignoreDuplicates: true,
         );
       } else {
         await _db
@@ -404,9 +478,45 @@ class StatusRepository {
     }
   }
 
+  /// JPEG, PNG, WebP, GIF or HEIC/HEIF, by magic number.
+  static bool _looksLikeImage(Uint8List b) {
+    bool at(int offset, List<int> sig) {
+      if (b.length < offset + sig.length) return false;
+      for (var i = 0; i < sig.length; i++) {
+        if (b[offset + i] != sig[i]) return false;
+      }
+      return true;
+    }
+
+    return at(0, const [0xFF, 0xD8, 0xFF]) || // JPEG
+        at(0, const [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) || // PNG
+        (at(0, const [0x52, 0x49, 0x46, 0x46]) && // RIFF....WEBP
+            at(8, const [0x57, 0x45, 0x42, 0x50])) ||
+        at(0, const [0x47, 0x49, 0x46, 0x38]) || // GIF8
+        (at(4, const [0x66, 0x74, 0x79, 0x70]) && _heifBrand(b)); // HEIC/HEIF
+  }
+
+  /// `ftyp` is shared with MP4/MOV, so check the brand too — videos aren't
+  /// images and shouldn't be uploaded as one.
+  static bool _heifBrand(Uint8List b) {
+    if (b.length < 12) return false;
+    final brand = String.fromCharCodes(b.sublist(8, 12));
+    return const {'heic', 'heix', 'heim', 'heis', 'mif1', 'msf1', 'avif'}
+        .contains(brand);
+  }
+
   Future<String?> _tryUpload(String filePath, String uid) async {
     try {
       final bytes = await File(filePath).readAsBytes();
+      // Paths in a design come from its JSON — and a remix starts from someone
+      // else's public design. Only ever upload actual image data, so a crafted
+      // design pointing at a private app file (shared_prefs holds the session)
+      // can't get that file published from the remixer's phone.
+      if (!_looksLikeImage(bytes)) {
+        debugPrint('StatusRepository image upload refused ($filePath): '
+            'not an image');
+        return null;
+      }
       final ext = filePath.split('.').last.toLowerCase();
       final safeExt = (ext == 'jpg' || ext == 'jpeg' || ext == 'png' || ext == 'webp')
           ? ext

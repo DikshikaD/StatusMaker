@@ -9,6 +9,7 @@ import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/shared/widgets/app_shimmer.dart';
 import 'package:status_maker/shared/utils/share_image.dart';
 import 'package:status_maker/shared/widgets/share_target_dialog.dart';
+import 'package:status_maker/features/moderation/post_actions_sheet.dart';
 import 'package:status_maker/features/statuses/data/likes_store.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 
@@ -306,6 +307,13 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
                     busy: _sharing,
                     onTap: _share,
                   ),
+                  // Report / hide / block — only on other people's posts.
+                  if (!_isOwn)
+                    _iconAction(
+                      icon: Icons.more_horiz,
+                      color: AppColors.textSecondary,
+                      onTap: () => showPostActionsSheet(context, s),
+                    ),
                   if (widget.onDelete != null)
                     _iconAction(
                       icon: Icons.delete_outline,

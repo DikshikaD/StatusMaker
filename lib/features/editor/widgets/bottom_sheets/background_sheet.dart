@@ -380,8 +380,17 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
   /// background — and an export taken in that window would bake in the gap.
   Future<void> _pickRemote(String fullUrl) async {
     setState(() => _busyUrl = fullUrl);
+    // precacheImage reports a load failure through onError and then completes
+    // normally — it never throws — so the failure has to be captured here or
+    // an offline tap would apply a URL that renders (and exports) blank.
+    var failed = false;
     try {
-      await precacheImage(CachedNetworkImageProvider(fullUrl), context);
+      await precacheImage(
+        CachedNetworkImageProvider(fullUrl),
+        context,
+        onError: (_, __) => failed = true,
+      );
+      if (failed) throw StateError('background download failed');
     } catch (_) {
       if (!mounted) return;
       setState(() => _busyUrl = null);

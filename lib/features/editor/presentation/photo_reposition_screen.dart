@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
@@ -21,9 +23,10 @@ const double _maxPhotoScale = 4.0;
 /// shaped photo's auto-centred crop cuts off the part the user actually
 /// wanted visible, with no way to fix it.
 ///
-/// Renders the shape at exactly the same size [EditableImageWidget] uses on
-/// the canvas, so the offset/scale chosen here match the final status
-/// pixel-for-pixel — no coordinate conversion needed on return.
+/// Lays the shape out at exactly the size [EditableImageWidget] uses on the
+/// canvas (then draws it enlarged with a FittedBox), so the offset/scale
+/// chosen here match the final status pixel-for-pixel — no coordinate
+/// conversion needed on return.
 class PhotoRepositionScreen extends StatefulWidget {
   final ImageObject image;
 
@@ -62,11 +65,22 @@ class _PhotoRepositionScreenState extends State<PhotoRepositionScreen> {
     _baseScale = _scale;
   }
 
-  void _onScaleUpdate(ScaleUpdateDetails d) {
+  /// [k] is how much larger than its canvas size the shape is drawn here;
+  /// finger movement is divided by it so the photo tracks the finger.
+  void _onScaleUpdate(ScaleUpdateDetails d, double k) {
     setState(() {
       _scale =
           (_baseScale * d.scale).clamp(_minPhotoScale, _maxPhotoScale);
-      _offset = _clamp(_offset + d.focalPointDelta, _scale, _size);
+      _offset = _clamp(_offset + d.focalPointDelta / k, _scale, _size);
+    });
+  }
+
+  void _setZoom(double scale) {
+    setState(() {
+      _scale = scale;
+      _baseScale = scale;
+      // Zooming out shrinks how far the photo may be panned.
+      _offset = _clamp(_offset, _scale, _size);
     });
   }
 
@@ -125,53 +139,93 @@ class _PhotoRepositionScreenState extends State<PhotoRepositionScreen> {
               ),
             ),
             Expanded(
-              child: Center(
-                child: GestureDetector(
-                  onScaleStart: _onScaleStart,
-                  onScaleUpdate: _onScaleUpdate,
-                  child: SizedBox(
-                    width: size.width,
-                    height: size.height,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        clipToImageShape(
-                          widget.image.shape,
-                          Transform.translate(
-                            offset: _offset,
-                            child: Transform.scale(
-                              scale: _scale,
-                              child: canvasImage(
-                                widget.image.path,
-                                width: size.width,
-                                height: size.height,
-                                fit: BoxFit.cover,
-                                cacheWidth: (size.width * 2 * _maxPhotoScale)
-                                    .round()
-                                    .clamp(1, 2400),
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  // Show the shape as large as the screen allows — at its
+                  // canvas size (~240px) it was too small to frame a face
+                  // with a pinch. Everything inside is still laid out in the
+                  // shape's own pixels, so the result needs no conversion;
+                  // only gesture deltas are divided by [k].
+                  final k = math.min(
+                    box.maxWidth * 0.86 / size.width,
+                    box.maxHeight * 0.86 / size.height,
+                  );
+                  final photo = Transform.translate(
+                    offset: _offset,
+                    child: Transform.scale(
+                      scale: _scale,
+                      child: canvasImage(
+                        widget.image.path,
+                        width: size.width,
+                        height: size.height,
+                        fit: BoxFit.cover,
+                        cacheWidth: (size.width * k * _maxPhotoScale)
+                            .round()
+                            .clamp(1, 2400),
+                      ),
+                    ),
+                  );
+                  return GestureDetector(
+                    // The whole area takes the pinch, not just the shape, so
+                    // a small shape is still easy to grab with two fingers.
+                    behavior: HitTestBehavior.opaque,
+                    onScaleStart: _onScaleStart,
+                    onScaleUpdate: (d) => _onScaleUpdate(d, k),
+                    onDoubleTap: _reset,
+                    child: ClipRect(
+                      child: Center(
+                        child: SizedBox(
+                          width: size.width * k,
+                          height: size.height * k,
+                          child: FittedBox(
+                            child: SizedBox(
+                              width: size.width,
+                              height: size.height,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                clipBehavior: Clip.none,
+                                children: [
+                                  // The part of the photo the shape cuts
+                                  // off, dimmed, so the user can see what
+                                  // they could pan to.
+                                  Opacity(opacity: 0.3, child: photo),
+                                  clipToImageShape(widget.image.shape, photo),
+                                  IgnorePointer(
+                                    child: CustomPaint(
+                                      painter: _ShapeOutlinePainter(
+                                        widget.image.shape,
+                                        strokeWidth: 2 / k,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         ),
-                        // A visual guide for the shape's edge — purely
-                        // decorative, doesn't affect the crop.
-                        IgnorePointer(
-                          child: clipToImageShape(
-                            widget.image.shape,
-                            DecoratedBox(
-                              decoration: BoxDecoration(
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.6),
-                                  width: 2,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Row(
+                children: [
+                  const Icon(Icons.zoom_out, color: Colors.white70),
+                  Expanded(
+                    child: Slider(
+                      value: _scale,
+                      min: _minPhotoScale,
+                      max: _maxPhotoScale,
+                      activeColor: AppColors.accent,
+                      inactiveColor: Colors.white24,
+                      onChanged: _setZoom,
                     ),
                   ),
-                ),
+                  const Icon(Icons.zoom_in, color: Colors.white70),
+                ],
               ),
             ),
             Padding(
@@ -201,4 +255,27 @@ class _PhotoRepositionScreenState extends State<PhotoRepositionScreen> {
       ),
     );
   }
+}
+
+/// The shape's edge as a thin white line, drawn over the photo.
+class _ShapeOutlinePainter extends CustomPainter {
+  final ImageShape shape;
+  final double strokeWidth;
+
+  const _ShapeOutlinePainter(this.shape, {required this.strokeWidth});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawPath(
+      imageShapePath(shape, size),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..color = Colors.white.withValues(alpha: 0.85),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ShapeOutlinePainter old) =>
+      old.shape != shape || old.strokeWidth != strokeWidth;
 }

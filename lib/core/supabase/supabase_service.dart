@@ -90,6 +90,19 @@ class SupabaseService {
     }
   }
 
+  /// Drops the (now deleted) account's session and starts a fresh anonymous
+  /// one. Used after "Delete my data": the server already removed the user, so
+  /// the local sign-out can't reach it and is allowed to fail.
+  static Future<bool> resetSession() async {
+    _ready = false;
+    try {
+      await Supabase.instance.client.auth.signOut(scope: SignOutScope.local);
+    } catch (e) {
+      debugPrint('SupabaseService: local sign-out after delete failed ($e).');
+    }
+    return ensureReady();
+  }
+
   /// A human-readable reason the backend isn't ready, mapped from [lastError].
   /// Used by repositories so users see the actual problem, not "no internet".
   static String get statusMessage {

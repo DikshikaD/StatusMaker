@@ -15,10 +15,11 @@
 // The service-account JSON is a credential: keep it out of git and out of chat —
 // set it as a secret in the dashboard or with the CLI above.
 //
-// verify_jwt stays ON (the default) for this function: the trigger presents
-// the service-role key as its bearer token, which is itself a valid JWT, so
-// legitimate calls pass while anyone without that key is rejected before this
-// code ever runs.
+// verify_jwt stays ON (the default) for this function, and the handler then
+// also requires the service-role key (see isServiceRole): every app user holds
+// a valid project JWT too, so verify_jwt on its own would let them through.
+// The trigger presents the service-role key as its bearer token, so legitimate
+// calls pass.
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -161,14 +162,42 @@ async function sendPush(
 
 // ---- handler ---------------------------------------------------------------
 
+/**
+ * True only for the service-role caller (the pg_net trigger, or a Database
+ * Webhook configured with that key).
+ *
+ * verify_jwt alone is NOT enough: it accepts any token signed by this project,
+ * including the session every anonymous app user gets — so without this check
+ * anyone could POST a hand-made record and push to any user id. The gateway
+ * has already verified the signature, so reading the role claim is safe.
+ */
+function isServiceRole(req: Request): boolean {
+  const auth = req.headers.get('Authorization') ?? '';
+  const token = auth.replace(/^Bearer\s+/i, '');
+  if (!token) return false;
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (serviceKey && token === serviceKey) return true;
+  try {
+    const part = token.split('.')[1];
+    if (!part) return false;
+    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(json).role === 'service_role';
+  } catch {
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
+  if (!isServiceRole(req)) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 });
+  }
   try {
     const payload: WebhookPayload = await req.json();
-    const record = payload.record;
+    const incoming = payload.record;
 
     // Only act on newly created notifications this function knows how to word.
     const KNOWN_TYPES = new Set(['like', 'remix']);
-    if (payload.type !== 'INSERT' || !record || !KNOWN_TYPES.has(record.type)) {
+    if (payload.type !== 'INSERT' || !incoming?.id) {
       return new Response(JSON.stringify({ skipped: true }), { status: 200 });
     }
 
@@ -183,9 +212,22 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
+    // Word the push from the stored row, not the request body: the row is what
+    // the trigger actually inserted, so a replayed or edited payload can't
+    // change who gets pushed or what it says.
+    const { data: record, error: recordError } = await supabase
+      .from('notifications')
+      .select('id, recipient_id, actor_id, status_id, type')
+      .eq('id', incoming.id)
+      .maybeSingle();
+    if (recordError) throw recordError;
+    if (!record || !KNOWN_TYPES.has(record.type)) {
+      return new Response(JSON.stringify({ skipped: true }), { status: 200 });
+    }
+
     const { data: tokens, error } = await supabase
       .from('device_tokens')
-      .select('token')
+      .select('token, lang')
       .eq('user_id', record.recipient_id);
     if (error) throw error;
 
@@ -256,7 +298,7 @@ Deno.serve(async (req) => {
     const accessToken = await getAccessToken(account);
     const results = await Promise.all(
       tokens.map((t) => {
-        const { title, body } = copyFor(null);
+        const { title, body } = copyFor(t.lang ?? null);
         return sendPush(account.project_id, accessToken, t.token, title, body, {
           type: record.type,
           status_id: record.status_id ?? '',
