@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/theme/app_theme.dart';
@@ -9,6 +10,7 @@ import 'package:status_maker/core/utils/responsive.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/notifications/push_service.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
+import 'package:status_maker/features/editor/utils/editor_export.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 import 'package:status_maker/features/home/presentation/main_layout.dart';
 import 'package:status_maker/features/splash/presentation/splash_screen.dart';
@@ -16,6 +18,11 @@ import 'package:status_maker/studio/shaders/studio_shaders.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Portrait only. The editor canvas is a fixed 9:16 status; in landscape it
+  // shrank to a ~190 px thumbnail (and the text on it vanished), leaving the
+  // app unusable until the phone was turned back.
+  await SystemChrome.setPreferredOrientations(
+      const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
   // Restore the user's saved language and theme before the first frame builds.
   // These are tiny, fast SharedPreferences reads.
   await S.init();
@@ -36,6 +43,9 @@ Future<void> main() async {
   // Android 13 permission dialog and talk to the network, neither of which
   // should sit in front of the splash screen. Never throws — see PushService.
   PushService.init();
+
+  // One-off cleanup of PNGs that older versions left in app storage.
+  purgeLegacyExports();
 
   // Warm the template fonts AFTER the first frame is on screen, so font
   // fetching/decoding never blocks startup. google_fonts caches the result,

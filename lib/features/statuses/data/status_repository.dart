@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -22,6 +23,20 @@ class StatusRepositoryException implements Exception {
   StatusRepositoryException(this.message);
   @override
   String toString() => message;
+}
+
+final Random _secureRandom = Random.secure();
+
+/// Object name for an upload. The buckets are public, so the name is the only
+/// thing keeping a private status's image from being fetched by someone who
+/// knows the owner's id (it is visible in the URLs of their posted statuses).
+/// A timestamp + counter is guessable; 96 random bits are not.
+@visibleForTesting
+String uniqueStorageName(String ext) {
+  final rnd = List.generate(12, (_) => _secureRandom.nextInt(256))
+      .map((b) => b.toRadixString(16).padLeft(2, '0'))
+      .join();
+  return '${DateTime.now().microsecondsSinceEpoch}_$rnd.$ext';
 }
 
 /// All reads/writes for the `statuses` table + the two storage buckets live
@@ -126,9 +141,7 @@ class StatusRepository {
     }
   }
 
-  int _seq = 0;
-  String _uniqueName(String ext) =>
-      '${DateTime.now().microsecondsSinceEpoch}_${_seq++}.$ext';
+  String _uniqueName(String ext) => uniqueStorageName(ext);
 
   // ---------------------------------------------------------------------------
   // Save / Post

@@ -450,13 +450,6 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     try {
       final bytes = await _capture();
       if (bytes == null) return;
-      try {
-        await saveToFile(bytes);
-      } catch (e) {
-        // Best-effort local copy; the cloud save below is what the user is
-        // told about, so a full disk here mustn't abort it silently.
-        debugPrint('local export failed: $e');
-      }
       final ok = await _cloudSave(bytes: bytes, makePublic: false);
       if (ok) AppNav.goToMyCreations();
     } finally {

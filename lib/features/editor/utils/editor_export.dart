@@ -25,12 +25,27 @@ Future<Uint8List?> captureCanvas(GlobalKey key, {double pixelRatio = 3.0}) async
 
 String _fileName() => 'status_${DateTime.now().millisecondsSinceEpoch}.png';
 
-/// Writes the PNG to the app's documents directory and returns the path.
-Future<String> saveToFile(Uint8List bytes) async {
-  final dir = await getApplicationDocumentsDirectory();
-  final file = File('${dir.path}/${_fileName()}');
-  await file.writeAsBytes(bytes);
-  return file.path;
+/// Saves used to also write every export to the app's documents directory. That
+/// folder is private to the app and nothing ever read it back, so each Save
+/// just left a multi-MB PNG behind forever (and "Delete my data" could not
+/// reach them). Saves no longer write there; this removes what earlier
+/// versions left. [dir] is injectable for tests. Never throws.
+Future<int> purgeLegacyExports([Directory? dir]) async {
+  var removed = 0;
+  try {
+    final root = dir ?? await getApplicationDocumentsDirectory();
+    final pattern = RegExp(r'^status_\d+\.png$');
+    await for (final e in root.list(followLinks: false)) {
+      if (e is! File) continue;
+      final name = e.uri.pathSegments.last;
+      if (!pattern.hasMatch(name)) continue;
+      try {
+        await e.delete();
+        removed++;
+      } catch (_) {}
+    }
+  } catch (_) {}
+  return removed;
 }
 
 /// Writes the PNG to the temp/cache directory and returns the path, ready to

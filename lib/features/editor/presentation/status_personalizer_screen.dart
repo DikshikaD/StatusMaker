@@ -420,15 +420,7 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     try {
       final bytes = await _capture();
       if (bytes == null) return;
-      // 1) Keep the existing device export (silent — the cloud save reports).
-      try {
-        await saveToFile(bytes);
-      } catch (e) {
-        // Best-effort local copy; the cloud save below is what the user is
-        // told about, so a full disk here mustn't abort it silently.
-        debugPrint('local export failed: $e');
-      }
-      // 2) Persist the editable design to the cloud (private).
+      // Persist the editable design to the cloud (private).
       final ok = await _cloudSave(bytes: bytes, makePublic: false);
       // Drop the loader before navigating, so the editor slides away clean
       // instead of carrying a spinner off-screen with it.

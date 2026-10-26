@@ -159,20 +159,28 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
                     ),
                     fit: BoxFit.cover,
                     gaplessPlayback: true,
-                    // Fade the photo in once decoded (no pop-in).
+                    // Fade the photo in once decoded (no pop-in). Until the
+                    // first frame there is a shimmer behind it: an
+                    // Image.loadingBuilder only fires if the provider reports
+                    // download progress, and this one doesn't, so a fast
+                    // scroll showed blank white cards until the image landed.
                     frameBuilder: (context, child, frame, wasSync) {
                       if (wasSync) return child;
-                      return AnimatedOpacity(
-                        opacity: frame == null ? 0 : 1,
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeOut,
-                        child: child,
+                      return Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          if (frame == null)
+                            const AppShimmer(child: ShimmerBox(radius: 0))
+                          else
+                            ColoredBox(color: AppColors.cardLight),
+                          AnimatedOpacity(
+                            opacity: frame == null ? 0 : 1,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                            child: child,
+                          ),
+                        ],
                       );
-                    },
-                    // Shimmer while the thumbnail downloads.
-                    loadingBuilder: (context, child, progress) {
-                      if (progress == null) return child;
-                      return const AppShimmer(child: ShimmerBox(radius: 0));
                     },
                     errorBuilder: (_, __, ___) => ColoredBox(
                       color: AppColors.cardLight,
@@ -307,23 +315,27 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
                     busy: _sharing,
                     onTap: _share,
                   ),
-                  // Report / hide / block — only on other people's posts.
-                  if (!_isOwn)
-                    _iconAction(
-                      icon: Icons.more_horiz,
-                      color: AppColors.textSecondary,
-                      onTap: () => showPostActionsSheet(context, s),
-                    ),
-                  if (widget.onDelete != null)
-                    _iconAction(
-                      icon: Icons.delete_outline,
-                      color: AppColors.textSecondary,
-                      onTap: widget.onDelete!,
-                    ),
                 ],
               ),
             ),
           ),
+          // Pinned outside the scroll view on purpose. With a remix count the
+          // like/remix/share group is wider than the room the CTA leaves, and
+          // when these sat inside it the report/hide/block menu (a Play UGC
+          // requirement) was clipped under the Customize button and only
+          // reachable by discovering a horizontal scroll.
+          if (!_isOwn)
+            _iconAction(
+              icon: Icons.more_horiz,
+              color: AppColors.textSecondary,
+              onTap: () => showPostActionsSheet(context, s),
+            ),
+          if (widget.onDelete != null)
+            _iconAction(
+              icon: Icons.delete_outline,
+              color: AppColors.textSecondary,
+              onTap: widget.onDelete!,
+            ),
           ElevatedButton.icon(
             onPressed: widget.onCustomize,
             // Explicit white on the icon — see the matching button in
