@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/core/theme/app_theme.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 import 'package:status_maker/features/category/presentation/category_screen.dart';
@@ -68,6 +69,19 @@ Future<void> drain(WidgetTester t) async {
 }
 
 void main() {
+  // The first screen to touch the backend initialises Supabase, whose auth
+  // client starts a periodic token-refresh timer. Created inside a test that is
+  // a FakeAsync timer, which the framework reports as "pending" and fails the
+  // test — so whichever screen happened to run first failed. Initialise once
+  // here, outside FakeAsync; the test HTTP client answers 400, so this
+  // returns quickly and the app stays in its offline state.
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+    await SupabaseService.ensureReady()
+        .timeout(const Duration(seconds: 20), onTimeout: () => false);
+  });
+
   for (final e in screens.entries) {
     for (final lang in const ['en', 'hi']) {
       for (final mode in const [ThemeMode.light, ThemeMode.dark]) {
