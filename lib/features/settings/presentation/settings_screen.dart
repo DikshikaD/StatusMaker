@@ -32,8 +32,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Hosted legal pages. Also the URLs to give the Play Console / App Store
   /// listing, so the store and the app point at the same documents.
-  static const _privacyUrl = 'https://claude.ai/artifact/CU2yxf4AxxHZcGkUNdF8Et';
-  static const _termsUrl = 'https://claude.ai/artifact/7ApLa5xCVTPS2Z8JXHvTLQ';
+  static const _privacyUrl = 'https://dikshikad.github.io/StatusMaker/privacy.html';
+  static const _termsUrl = 'https://dikshikad.github.io/StatusMaker/terms.html';
 
   /// Opens [url] in the browser rather than an in-app view, so the page gets
   /// the browser's own back button and address bar.
