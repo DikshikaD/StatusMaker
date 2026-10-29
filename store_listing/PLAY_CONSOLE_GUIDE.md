@@ -51,8 +51,8 @@ Use only real app screens and real, non-copyrighted photos.
 | Category | Art & Design |
 | Tags | Photo editing, Greeting cards, Quotes (pick the closest offered) |
 | Email | appbedev@gmail.com |
-| Website | https://dikshikad.github.io/StatusMaker/ |
-| Privacy policy | https://dikshikad.github.io/StatusMaker/privacy.html |
+| Website | https://sites.google.com/view/appbedev-status-maker/home |
+| Privacy policy | https://sites.google.com/view/appbedev-status-maker/home |
 
 ## 4. App content (Policy → App content)
 
@@ -85,7 +85,7 @@ under 13). Not designed to appeal to children.
 | Does your app collect or share user data? | Yes |
 | Is all collected data encrypted in transit? | Yes |
 | Do you provide a way for users to request data deletion? | Yes |
-| Data deletion URL (optional field) | https://dikshikad.github.io/StatusMaker/delete-data.html |
+| Data deletion URL (optional field) | https://sites.google.com/view/deleteyourstatusmakerdata/home |
 | Does your app allow users to create an account? | **No** (no sign-up or login) |
 
 Data types collected (none are *shared* — Supabase and Firebase are service
@@ -120,8 +120,10 @@ phone number.
 - [ ] Supabase SQL run in order: `notifications.sql` → `0002` → `0003` → `0004`
 - [ ] `notify-on-like` Edge Function redeployed; `NOTIFY_HOOK_SECRET` set and
       matching the Vault secret `notify_on_like_key`
-- [ ] GitHub Pages enabled (`main` / `docs`); all three legal URLs open in a
-      private browser window
+- [ ] All three legal pages open in a private browser window (Google Sites:
+      privacy `appbedev-status-maker`, terms `status-maker-terms`, deletion
+      `deleteyourstatusmakerdata`). If you edit the policy, regenerate
+      `store_listing/legal_html/` and re-paste it into the Sites embed.
 - [ ] CAPTCHA / rate limit for anonymous sign-ins set in Supabase Auth
 - [ ] Test on a real phone: first launch, Post (Terms dialog), Share, Report,
       Delete my data, dark mode

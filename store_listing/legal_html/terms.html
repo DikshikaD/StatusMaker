@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status Maker Terms</title>
+<meta name="description" content="The terms for using the Status Maker app by AppBeDev, including community rules, reporting and moderation.">
+<style>
+:root {
+  --bg: #fbfaf9; --surface: #ffffff; --fg: #22201f; --muted: #6b6461;
+  --line: #ebe5e2; --accent: #d9542f; --accent-soft: #fdeee8;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161413; --surface: #1f1c1b; --fg: #f1ece9; --muted: #a9a09b;
+    --line: #34302e; --accent: #f28a68; --accent-soft: #2c201c; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--body); font-size: 1rem; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 44rem; margin: 0 auto; padding-block: 2.5rem 4rem; display: grid; gap: 2.25rem; }
+header { display: grid; gap: .75rem; padding-bottom: 1.75rem; border-bottom: 1px solid var(--line); }
+.app { font-weight: 600; color: var(--accent); font-size: .95rem; }
+h1 { font-family: var(--display); font-size: clamp(2rem, 6vw, 2.75rem); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.meta { color: var(--muted); font-size: .92rem; margin: 0; }
+.summary { background: var(--accent-soft); border-radius: 14px; padding: 1.1rem 1.25rem; display: grid; gap: .5rem; }
+.summary h2 { font-family: var(--body); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0; }
+.summary ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .3rem; }
+nav ol { margin: 0; padding-left: 1.4rem; columns: 2 14rem; column-gap: 2rem; color: var(--muted); }
+nav a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--line); }
+nav a:hover, nav a:focus-visible { border-color: var(--accent); }
+main { display: grid; gap: 2rem; counter-reset: sec; }
+section { display: grid; gap: .6rem; scroll-margin-top: 1rem; }
+section h2 { font-family: var(--display); font-size: 1.35rem; line-height: 1.25; margin: 0; text-wrap: balance; counter-increment: sec; }
+section h2::before { content: counter(sec) ". "; color: var(--accent); }
+section p, section ul { margin: 0; }
+section ul { padding-left: 1.2rem; display: grid; gap: .35rem; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: .93rem; }
+th, td { text-align: left; vertical-align: top; padding: .7rem .9rem; border-bottom: 1px solid var(--line); }
+th { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.email { font-weight: 600; color: var(--accent); user-select: all; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+footer { border-top: 1px solid var(--line); padding-top: 1.25rem; color: var(--muted); font-size: .92rem; display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="app">Status Maker by AppBeDev</div>
+    <h1>Terms &amp; Conditions</h1>
+    <p class="meta">Effective 29 October 2026 · Applies to the Status Maker app for Android (package com.appbedev.statusmaker)</p>
+  </header>
+
+  <aside class="summary" aria-label="Summary">
+    <h2>The short version</h2>
+    <ul>
+      <li>Status Maker is free for making and sharing picture statuses.</li>
+      <li>You own what you create. Posting it lets other users see, like, share and customise it.</li>
+      <li>No sexual, hateful, violent, illegal or copied content. Zero tolerance for anything that harms children.</li>
+      <li>You can report, hide or block anything. We remove content that breaks these rules and may block accounts.</li>
+      <li>You can delete your data at any time: Settings → Delete my data.</li>
+    </ul>
+  </aside>
+
+  <nav aria-label="Contents">
+    <ol>
+      <li><a href="#accept">Accepting these terms</a></li>
+      <li><a href="#eligibility">Who can use the app</a></li>
+      <li><a href="#service">The service</a></li>
+      <li><a href="#account">Your anonymous account</a></li>
+      <li><a href="#content">Your content</a></li>
+      <li><a href="#rules">Community rules</a></li>
+      <li><a href="#moderation">Reporting and moderation</a></li>
+      <li><a href="#ip">Copyright complaints</a></li>
+      <li><a href="#ours">Our content</a></li>
+      <li><a href="#third">Other apps and services</a></li>
+      <li><a href="#ending">Ending your use</a></li>
+      <li><a href="#disclaimer">Disclaimers</a></li>
+      <li><a href="#liability">Limitation of liability</a></li>
+      <li><a href="#law">Governing law and grievances</a></li>
+      <li><a href="#changes">Changes</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <section id="accept">
+      <h2>Accepting these terms</h2>
+      <p>These terms are an agreement between you and AppBeDev ("we", "us"), based in India, for your use of the Status Maker app. By using the app you agree to them and to our <a href="https://sites.google.com/view/appbedev-status-maker/home" target="_blank" rel="noopener">Privacy Policy</a>. Before your first public post, the app also asks you to confirm that you agree to the community rules below. If you don't agree, please don't use the app.</p>
+    </section>
+
+    <section id="eligibility">
+      <h2>Who can use the app</h2>
+      <p>You must be at least 13 years old. If you are under 18 (or the age of majority where you live), you may use the app only with the consent and supervision of a parent or guardian, who accepts these terms on your behalf. You may not use the app if the law forbids it, or if we have blocked you.</p>
+    </section>
+
+    <section id="service">
+      <h2>The service</h2>
+      <p>Status Maker lets you create picture statuses from templates, generated backgrounds, quotes, fonts, stickers, frames and your own photos; save them privately; post them to a public feed; like and customise other users' posts; receive notifications about activity on your posts; and share images to other apps. The app is free and has no ads or in-app purchases. We may add, change, limit or remove features at any time.</p>
+    </section>
+
+    <section id="account">
+      <h2>Your anonymous account</h2>
+      <p>The app creates an anonymous account for you automatically, so there's no username or password. It is tied to the app installed on your phone. If you uninstall the app or clear its data, you lose access to that account and its saved statuses, and we can't restore it. Statuses you already posted stay in the feed until you or we delete them. Keep the app on your phone, or use Settings → Delete my data first, if you want your content gone.</p>
+      <p>Don't try to use, access or interfere with another person's account or data.</p>
+    </section>
+
+    <section id="content">
+      <h2>Your content</h2>
+      <p>You keep ownership of the statuses you create and the photos and text you add.</p>
+      <p>When you <strong>post</strong> a status, you give AppBeDev a worldwide, non-exclusive, royalty-free licence to store, copy, display, resize and distribute it within the app and its feed, and you allow other users to view it, like it, share its image, and use it as the starting point for their own status. This licence ends for a status when you delete it, except for copies other users already shared or customised.</p>
+      <p>Statuses you <strong>save</strong> without posting are stored so you can edit them later; we don't show them to other users.</p>
+      <p>You are responsible for what you post. You confirm that you own or have permission to use every photo, name, logo and piece of text in it, and that it follows these terms and the law. Don't post anyone else's photo or personal information without their permission.</p>
+    </section>
+
+    <section id="rules">
+      <h2>Community rules</h2>
+      <p>Don't create, post or share content that:</p>
+      <ul>
+        <li>sexualises, exploits or endangers children in any way. We have zero tolerance for this: it is removed, the account is blocked, and we report it to the authorities;</li>
+        <li>is sexually explicit or pornographic, or contains nudity;</li>
+        <li>threatens, harasses, bullies, or targets a person or group, or is hateful toward anyone based on religion, caste, race, ethnicity, gender, sexual orientation, disability, age or nationality;</li>
+        <li>promotes violence, terrorism, self-harm, or dangerous or illegal activities, drugs or weapons;</li>
+        <li>insults or mocks any religion or religious belief, or is likely to cause communal disharmony;</li>
+        <li>spreads false or misleading information intended to deceive or cause harm, including about elections, health or public safety;</li>
+        <li>impersonates a person, brand or organisation, or falsely claims an affiliation;</li>
+        <li>shares someone's private information, or photos of them, without consent;</li>
+        <li>infringes copyright, trademarks or other rights;</li>
+        <li>is spam, advertising, scams, or links meant to trick people;</li>
+        <li>is otherwise unlawful under Indian law or the law where you live.</li>
+      </ul>
+      <p>Also don't: misuse the report button or file false reports; try to disrupt, overload or reverse-engineer the service; access data that isn't yours; or use bots, scripts or multiple accounts to post, like, report or scrape.</p>
+    </section>
+
+    <section id="moderation">
+      <h2>Reporting and moderation</h2>
+      <ul>
+        <li><strong>Report:</strong> tap the <strong>⋯</strong> menu on any post that isn't yours, choose <strong>Report this post</strong>, and pick a reason. The post is hidden for you straight away, and we receive the report.</li>
+        <li><strong>Hide or block:</strong> from the same menu you can hide one post, or block its creator so you no longer see their posts on your device.</li>
+        <li><strong>Review:</strong> we review reports and remove content that breaks these terms, usually within 72 hours. A post reported by several established users is hidden from the feed automatically while we review it. Content that harms children, threatens violence, or is otherwise seriously harmful is removed as soon as we are aware of it, and may be reported to the authorities.</li>
+        <li><strong>Action on accounts:</strong> we may remove content, limit features, or block an account that breaks these terms, without notice where needed to protect others.</li>
+        <li><strong>Appeals:</strong> if you think we removed your content by mistake, email us with the post's title and we will review it again.</li>
+      </ul>
+      <p>You can also report content by email to <span class="email">appbedev@gmail.com</span> with a screenshot and a short description.</p>
+    </section>
+
+    <section id="ip">
+      <h2>Copyright complaints</h2>
+      <p>If you believe content in the app infringes your copyright or trademark, email <span class="email">appbedev@gmail.com</span> with: your contact details, the work you own, the post that infringes it (a screenshot and its title), and a statement that the information is accurate and that you are the owner or authorised to act for them. We will remove infringing content and may block repeat infringers.</p>
+    </section>
+
+    <section id="ours">
+      <h2>Our content</h2>
+      <p>The app's design, code, templates, backgrounds, frames, stickers and built-in quotes belong to AppBeDev or our licensors. You may use them to make statuses in the app and share the finished images for personal, non-commercial purposes. You may not extract, resell or redistribute them separately from your statuses, or copy the app.</p>
+    </section>
+
+    <section id="third">
+      <h2>Other apps and services</h2>
+      <p>When you share a status to WhatsApp, Instagram, Facebook or any other app, that app's own terms apply to what you share there. Status Maker is not affiliated with, endorsed by or sponsored by WhatsApp, Instagram, Facebook or Meta; those names are used only to show where you can share. We are not responsible for other apps or services.</p>
+    </section>
+
+    <section id="ending">
+      <h2>Ending your use</h2>
+      <p>You can stop using the app at any time, and delete your data in Settings → Delete my data or as described on our <a href="https://sites.google.com/view/deleteyourstatusmakerdata/home" target="_blank" rel="noopener">Delete your data page</a>. We may suspend or end your access if you break these terms, if the law requires it, or if we stop offering the app. Sections that by their nature should continue (such as content licences already granted for copies others made, disclaimers and limitation of liability) continue after that.</p>
+    </section>
+
+    <section id="disclaimer">
+      <h2>Disclaimers</h2>
+      <p>Status Maker is provided "as is" and "as available". We don't promise it will always be available, uninterrupted, error-free, or that saved statuses will never be lost, so keep copies of anything important by sharing or saving the image. Content in the public feed comes from users; we don't endorse it and aren't responsible for it, although we act on reports as described above.</p>
+    </section>
+
+    <section id="liability">
+      <h2>Limitation of liability</h2>
+      <p>To the extent the law allows, AppBeDev isn't liable for indirect, incidental, special or consequential losses, or for loss of data or content, arising from your use of the app or from other users' content. The app is free, and our total liability for any claim relating to it is limited to INR 1,000. Nothing in these terms limits liability that can't be limited by law, or your rights as a consumer.</p>
+    </section>
+
+    <section id="law">
+      <h2>Governing law and grievances</h2>
+      <p>These terms are governed by the laws of India. Disputes will be handled by the courts of India, unless the law of the country you live in gives you the right to bring a claim locally.</p>
+      <p>Grievance officer (under the Information Technology Act, 2000 and its rules): AppBeDev, <span class="email">appbedev@gmail.com</span>. We acknowledge complaints within 48 hours and resolve them within 15 days, or sooner where the law requires.</p>
+    </section>
+
+    <section id="changes">
+      <h2>Changes</h2>
+      <p>We may update these terms. We'll change the effective date above, and tell you in the app about significant changes before they apply. Continuing to use the app after an update means you accept the new terms.</p>
+    </section>
+
+    <section id="contact">
+      <h2>Contact</h2>
+      <p>AppBeDev · <span class="email">appbedev@gmail.com</span> · India</p>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 AppBeDev</span>
+    <a href="https://sites.google.com/view/appbedev-status-maker/home" target="_blank" rel="noopener">Privacy Policy</a>
+    <a href="https://sites.google.com/view/deleteyourstatusmakerdata/home" target="_blank" rel="noopener">Delete your data</a>
+  </footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status Maker Privacy Policy</title>
+<meta name="description" content="How the Status Maker app by AppBeDev collects, uses, shares, protects and deletes your information.">
+<style>
+:root {
+  --bg: #fbfaf9; --surface: #ffffff; --fg: #22201f; --muted: #6b6461;
+  --line: #ebe5e2; --accent: #d9542f; --accent-soft: #fdeee8;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161413; --surface: #1f1c1b; --fg: #f1ece9; --muted: #a9a09b;
+    --line: #34302e; --accent: #f28a68; --accent-soft: #2c201c; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--body); font-size: 1rem; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 44rem; margin: 0 auto; padding-block: 2.5rem 4rem; display: grid; gap: 2.25rem; }
+header { display: grid; gap: .75rem; padding-bottom: 1.75rem; border-bottom: 1px solid var(--line); }
+.app { font-weight: 600; color: var(--accent); font-size: .95rem; }
+h1 { font-family: var(--display); font-size: clamp(2rem, 6vw, 2.75rem); line-height: 1.1; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+.meta { color: var(--muted); font-size: .92rem; margin: 0; }
+.summary { background: var(--accent-soft); border-radius: 14px; padding: 1.1rem 1.25rem; display: grid; gap: .5rem; }
+.summary h2 { font-family: var(--body); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0; }
+.summary ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .3rem; }
+nav ol { margin: 0; padding-left: 1.4rem; columns: 2 14rem; column-gap: 2rem; color: var(--muted); }
+nav a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--line); }
+nav a:hover, nav a:focus-visible { border-color: var(--accent); }
+main { display: grid; gap: 2rem; counter-reset: sec; }
+section { display: grid; gap: .6rem; scroll-margin-top: 1rem; }
+section h2 { font-family: var(--display); font-size: 1.35rem; line-height: 1.25; margin: 0; text-wrap: balance; counter-increment: sec; }
+section h2::before { content: counter(sec) ". "; color: var(--accent); }
+section p, section ul { margin: 0; }
+section ul { padding-left: 1.2rem; display: grid; gap: .35rem; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: .93rem; }
+th, td { text-align: left; vertical-align: top; padding: .7rem .9rem; border-bottom: 1px solid var(--line); }
+th { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.email { font-weight: 600; color: var(--accent); user-select: all; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+footer { border-top: 1px solid var(--line); padding-top: 1.25rem; color: var(--muted); font-size: .92rem; display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="app">Status Maker by AppBeDev</div>
+    <h1>Privacy Policy</h1>
+    <p class="meta">Effective 29 October 2026 · Applies to the Status Maker app for Android (package com.appbedev.statusmaker) and this website</p>
+  </header>
+
+  <aside class="summary" aria-label="Summary">
+    <h2>The short version</h2>
+    <ul>
+      <li>There is no sign-up. The app creates an anonymous account for you automatically. We never ask for your name, email, phone number or contacts.</li>
+      <li>We store the statuses you save or post, the photos you put in them, your likes, reports you send, and a notification token.</li>
+      <li>Statuses you <strong>post</strong> are public to everyone using the app. Statuses you only <strong>save</strong> are private to you.</li>
+      <li>No ads. No analytics or tracking. No selling or renting of data.</li>
+      <li>Delete everything at any time in the app: <strong>Settings → Delete my data</strong>. Or use our <a href="https://sites.google.com/view/deleteyourstatusmakerdata/home" target="_blank" rel="noopener">Delete your data page</a>.</li>
+    </ul>
+  </aside>
+
+  <nav aria-label="Contents">
+    <ol>
+      <li><a href="#who">Who we are</a></li>
+      <li><a href="#collect">What we collect</a></li>
+      <li><a href="#device">What stays on your device</a></li>
+      <li><a href="#use">How we use it</a></li>
+      <li><a href="#public">What other people can see</a></li>
+      <li><a href="#share">Service providers and sharing</a></li>
+      <li><a href="#permissions">Device permissions</a></li>
+      <li><a href="#security">How we protect your data</a></li>
+      <li><a href="#retention">How long we keep it</a></li>
+      <li><a href="#delete">Deleting your data</a></li>
+      <li><a href="#rights">Your rights and choices</a></li>
+      <li><a href="#children">Children</a></li>
+      <li><a href="#transfers">Where data is processed</a></li>
+      <li><a href="#changes">Changes to this policy</a></li>
+      <li><a href="#contact">Contact and grievance officer</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <section id="who">
+      <h2>Who we are</h2>
+      <p>Status Maker is made by AppBeDev ("we", "us", "our"), based in India. It lets you design picture statuses from templates, backgrounds, quotes, fonts, stickers and your own photos; save them; post them to a shared public feed; like and customise other people's posts; and share the finished image to apps such as WhatsApp, Instagram and Facebook.</p>
+      <p>This policy explains what information the app handles, why, who it is shared with, how it is protected, and how you can delete it. It applies together with our <a href="https://sites.google.com/view/status-maker-terms/home" target="_blank" rel="noopener">Terms &amp; Conditions</a>.</p>
+    </section>
+
+    <section id="collect">
+      <h2>What we collect</h2>
+      <p>The app has no sign-up or login screen. We do not collect your name, email address, phone number, contacts, precise or approximate location, or any information from other apps on your phone.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Information</th><th>When it is collected</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Anonymous account ID</strong>: a random identifier, plus a session token that keeps you signed in</td><td>Automatically, the first time the app connects</td><td>To keep your saved statuses, likes and notifications together without a login</td></tr>
+            <tr><td><strong>Statuses you save or post</strong>: the editable design (text, fonts, colours, layout, stickers, frame), title, category, whether it is public, which post it was customised from, and preview images of the finished status</td><td>When you tap Save or Post</td><td>To let you reopen and edit your work, and to show posted statuses in the feed</td></tr>
+            <tr><td><strong>Photos you add to a status</strong></td><td>Only when you save or post a status that contains them</td><td>So the status can be reopened on any device and shown in the feed</td></tr>
+            <tr><td><strong>Likes</strong>: which statuses you liked, and when</td><td>When you tap the heart</td><td>To show like counts and your "Saved" list, and to notify the creator</td></tr>
+            <tr><td><strong>Activity notifications</strong>: that someone liked or customised your status, and whether you have read it</td><td>When another user does so</td><td>To show your notification list and send push notifications</td></tr>
+            <tr><td><strong>Reports you send</strong>: the post, the reason you picked, your anonymous account ID and the time</td><td>When you report a post</td><td>To review and remove content that breaks our Terms</td></tr>
+            <tr><td><strong>Push notification token</strong>, device platform (Android) and app language (English or Hindi)</td><td>When the app starts</td><td>To deliver notifications to your phone, in your language</td></tr>
+            <tr><td><strong>Technical request data</strong>: IP address, time and type of request, recorded automatically by our hosting provider's servers</td><td>Whenever the app talks to our servers</td><td>To operate, secure and troubleshoot the service and prevent abuse</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Photos you pick but don't save or post stay on your phone. The app uses Android's system photo picker, so it only ever receives the single photo you choose, never your whole photo library.</p>
+      <p>We do not collect financial information, health information, contacts, call logs, SMS, location, browsing history, or a list of installed apps. The app checks only whether WhatsApp, Instagram or Facebook is installed, on your phone, to decide which share buttons to show; that check never leaves your device.</p>
+    </section>
+
+    <section id="device">
+      <h2>What stays on your device</h2>
+      <p>These are stored only on your phone and are never sent to us:</p>
+      <ul>
+        <li>Your language and light/dark theme choice, and whether you have finished the welcome screens.</li>
+        <li>Posts you chose to hide and creators you chose to block.</li>
+        <li>That you agreed to the posting rules.</li>
+        <li>Cached copies of images you viewed (so the feed loads faster and uses less data) and temporary copies of images you share.</li>
+      </ul>
+      <p>If Android's backup is turned on for your phone, Android may include the app's settings and sign-in session in your Google account backup, so your anonymous account can be restored on a new phone. You control this in your phone's backup settings.</p>
+    </section>
+
+    <section id="use">
+      <h2>How we use it</h2>
+      <ul>
+        <li>To provide the app: keep your saved statuses, show the public feed, likes and customisations, and send notifications.</li>
+        <li>To keep the service safe: review reports, hide or remove content that breaks our Terms, and detect and prevent abuse such as spam or fake reports.</li>
+        <li>To operate and fix the service: diagnose errors and keep our servers working.</li>
+        <li>To comply with the law and respond to lawful requests.</li>
+      </ul>
+      <p>We do not use your information for advertising, we do not build profiles of you, we do not use it to make automated decisions about you, and we do not sell or rent it to anyone.</p>
+    </section>
+
+    <section id="public">
+      <h2>What other people can see</h2>
+      <ul>
+        <li><strong>Posted statuses are public.</strong> Anyone using the app can see them, like them, share the image, and customise a copy of them. Photos inside a posted status are visible as part of it.</li>
+        <li><strong>Saved statuses</strong> that you have not posted are shown only to you in the app. Their images are stored at long, hard-to-guess web addresses, so treat anything you upload as something a person who obtains that address could see.</li>
+        <li>Other users do not see your account ID, who liked a post, or who reported it. They see the like and customisation counts.</li>
+        <li>When someone customises your posted status, their copy is a new status that belongs to them.</li>
+      </ul>
+      <p>Don't put personal information (phone numbers, addresses, other people's private photos) in a status you post.</p>
+    </section>
+
+    <section id="share">
+      <h2>Service providers and sharing</h2>
+      <p>We use these providers to run the app. They process data on our behalf, under contracts and their own privacy terms:</p>
+      <ul>
+        <li><strong>Supabase</strong> (<a href="https://supabase.com/privacy" target="_blank" rel="noopener">privacy policy</a>) hosts our database, file storage and anonymous accounts.</li>
+        <li><strong>Google Firebase Cloud Messaging</strong> (<a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">privacy information</a>) delivers push notifications using your device's notification token.</li>
+        <li><strong>Google Fonts</strong> (<a href="https://developers.google.com/fonts/faq/privacy" target="_blank" rel="noopener">privacy information</a>): the editor downloads font files from Google's servers the first time you use a font. Like any website request, this shares your IP address with Google. No other data is sent.</li>
+      </ul>
+      <p>When you tap Share, the image (and its title, if any) goes to the app you choose, such as WhatsApp. What happens there is covered by that app's own privacy policy. "Rate us" opens the Google Play Store.</p>
+      <p>We may disclose information if required by law, court order or a valid government request; to enforce our Terms; or to protect the rights, property or safety of our users or others. If AppBeDev is ever involved in a merger or sale, data may transfer to the new owner under this policy, and we will tell you before it is used under different terms.</p>
+    </section>
+
+    <section id="permissions">
+      <h2>Device permissions</h2>
+      <ul>
+        <li><strong>Notifications</strong> (Android 13 and later asks you): to tell you when someone likes or customises your status. We ask after the welcome screens, and you can turn it off at any time in your phone's settings.</li>
+        <li><strong>Internet and network state</strong>: to load the feed, save your statuses and receive notifications.</li>
+        <li><strong>Photos</strong>: no permission is needed. Android's photo picker hands the app only the photo you select.</li>
+      </ul>
+      <p>The app does not use your camera, microphone, location, contacts or files outside its own storage.</p>
+    </section>
+
+    <section id="security">
+      <h2>How we protect your data</h2>
+      <ul>
+        <li>All data travels over encrypted HTTPS connections, and our provider encrypts stored data at rest.</li>
+        <li>Database access rules let each account read only public posts and its own private ones, and change or delete only its own. Other users can't read your likes, reports, notifications or device tokens.</li>
+        <li>Internal operations (sending notifications, moderation) run on the server and can't be triggered by other users. Server keys are never included in the app.</li>
+        <li>Uploads are limited to image files of a set size, stored in a folder that only your account can write to.</li>
+        <li>Notifications are rate-limited so no one can flood your phone.</li>
+      </ul>
+      <p>No system is perfectly secure. If we become aware of a breach that affects your information, we will notify you and the authorities as the law requires.</p>
+    </section>
+
+    <section id="retention">
+      <h2>How long we keep it</h2>
+      <ul>
+        <li><strong>Statuses, photos, likes and notifications</strong>: until you delete them or use Delete my data.</li>
+        <li><strong>A deleted single status</strong> disappears from the app and the feed immediately. Its stored image files may remain at their web address until you use Delete my data, which removes every file in your folder.</li>
+        <li><strong>Notification tokens</strong>: replaced when they change, and removed when they stop working or when you delete your data.</li>
+        <li><strong>Reports</strong>: kept while we review them and for as long as needed to keep the service safe, then deleted with your account.</li>
+        <li><strong>Server request logs</strong>: kept by our hosting provider for a limited period for security and troubleshooting.</li>
+        <li><strong>Unused anonymous accounts</strong> may be removed after a long period of inactivity.</li>
+      </ul>
+    </section>
+
+    <section id="delete">
+      <h2>Deleting your data</h2>
+      <p><strong>Everything, in the app:</strong> open <strong>Settings → Delete my data</strong> and confirm. This immediately and permanently deletes your statuses (including posted ones), the photos and preview images stored for them, your likes, notifications, reports, device tokens and your anonymous account. It can't be undone.</p>
+      <p><strong>One status:</strong> open it in My Creations or the feed and tap Delete.</p>
+      <p><strong>Can't open the app?</strong> See our <a href="https://sites.google.com/view/deleteyourstatusmakerdata/home" target="_blank" rel="noopener">Delete your data page</a>, or email <span class="email">appbedev@gmail.com</span> with the subject "Delete my data". We'll delete your data within 30 days and confirm by email.</p>
+      <p>Uninstalling the app removes the settings stored on your phone, but not what is on our servers, and an anonymous account can't be recovered after uninstalling. Delete your data first if you want it gone. Customised copies that other users already made of your public posts belong to them; their text and layout stay, but images stored in your folder are removed.</p>
+    </section>
+
+    <section id="rights">
+      <h2>Your rights and choices</h2>
+      <p>Depending on where you live, including under India's Digital Personal Data Protection Act, 2023, the EU/UK GDPR and similar laws, you may have the right to:</p>
+      <ul>
+        <li>access the personal data we hold about you, and get a copy of it;</li>
+        <li>correct it, or delete it;</li>
+        <li>withdraw consent (for example, turn off notifications, or stop using the app and delete your data);</li>
+        <li>object to or restrict certain processing;</li>
+        <li>nominate someone to exercise your rights if you are unable to;</li>
+        <li>complain to a data protection authority, such as the Data Protection Board of India.</li>
+      </ul>
+      <p>You can delete your data yourself in the app at any time. For anything else, email us. Because accounts are anonymous, we may ask for details that let us find your statuses (such as their titles) before acting on a request. We reply within 30 days.</p>
+    </section>
+
+    <section id="children">
+      <h2>Children</h2>
+      <p>Status Maker is not directed at children. You must be at least 13 years old to use it, and if you are under 18 (or the age of majority where you live) you may use it only with the consent and supervision of a parent or guardian. We don't knowingly collect data from children under 13. If you believe a child has used the app or posted content, report it in the app or email us, and we will delete it.</p>
+    </section>
+
+    <section id="transfers">
+      <h2>Where data is processed</h2>
+      <p>Our service providers may store and process data on servers outside India, including in other countries where Supabase and Google operate. Where we transfer data, we rely on providers with industry-standard security and contractual safeguards, and we follow any transfer restrictions under Indian law.</p>
+    </section>
+
+    <section id="changes">
+      <h2>Changes to this policy</h2>
+      <p>If we change how we handle data, we'll update this page and the effective date above. For significant changes we'll also tell you in the app before they apply.</p>
+    </section>
+
+    <section id="contact">
+      <h2>Contact and grievance officer</h2>
+      <p>For questions, requests or complaints about privacy, contact our grievance officer:</p>
+      <p>AppBeDev · <span class="email">appbedev@gmail.com</span> · India</p>
+      <p>We acknowledge complaints within 48 hours and resolve them within 30 days.</p>
+    </section>
+  </main>
+
+  <footer>
+    <span>© 2026 AppBeDev</span>
+    <a href="https://sites.google.com/view/status-maker-terms/home" target="_blank" rel="noopener">Terms &amp; Conditions</a>
+    <a href="https://sites.google.com/view/deleteyourstatusmakerdata/home" target="_blank" rel="noopener">Delete your data</a>
+  </footer>
+</div>
+</body>
+</html>
