@@ -75,7 +75,8 @@ class _SavedStatusCardState extends State<SavedStatusCard> {
   /// / any other app first, then download the thumbnail and hand it over. The
   /// popup opens before the download so it appears instantly.
   Future<void> _share() async {
-    final url = widget.status.thumbUrl;
+    // Share the full-resolution export, not the small feed preview.
+    final url = widget.status.fullImageUrl;
     if (url == null || url.isEmpty || _sharing) return;
     final target = await showShareTargetDialog(context);
     if (target == null || !mounted) return;

@@ -74,6 +74,12 @@ class TransformableObject extends StatefulWidget {
   final Widget child;
   final VoidCallback onSelect;
   final VoidCallback onDelete;
+
+  /// What a single tap on the content does. Defaults to [onSelect]. Text passes
+  /// its "start editing" callback here so one tap opens the keyboard — selection
+  /// for dragging still happens via [onSelect] on gesture start, so a drag never
+  /// triggers this.
+  final VoidCallback? onTap;
   final VoidCallback? onDoubleTap;
 
   /// Committed once per gesture, on end. [boxWidth] is null for objects that
@@ -115,6 +121,7 @@ class TransformableObject extends StatefulWidget {
     required this.onTransformEnd,
     required this.canvasSize,
     this.boxWidth,
+    this.onTap,
     this.onDoubleTap,
     this.enableRotation = true,
   });
@@ -562,7 +569,7 @@ class _TransformableObjectState extends State<TransformableObject> {
                         padding: const EdgeInsets.all(_pad),
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: widget.onSelect,
+                          onTap: widget.onTap ?? widget.onSelect,
                           onDoubleTap: widget.onDoubleTap,
                           onScaleStart: _onScaleStart,
                           onScaleUpdate: _onScaleUpdate,

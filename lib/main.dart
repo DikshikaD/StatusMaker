@@ -30,6 +30,13 @@ Future<void> main() async {
   await FirstRun.init();
   runApp(const MyApp());
 
+  // Kept-alive tabs and const subtrees don't rebuild when MaterialApp does, so
+  // they kept the old palette (e.g. white titles on the light background after
+  // switching back from dark). Mark every element dirty once the new theme or
+  // language is in place.
+  ThemeController.mode.addListener(_rebuildEverything);
+  S.lang.addListener(_rebuildEverything);
+
   // Connect to the backend and ensure a (anonymous) session — deliberately
   // NOT awaited. With no network, the SDK's session recovery can sit in a
   // token-refresh retry loop for as long as the connection is down, which
@@ -61,6 +68,17 @@ Future<void> main() async {
   });
 }
 
+void _rebuildEverything() {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    void mark(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(mark);
+    }
+
+    WidgetsBinding.instance.rootElement?.visitChildren(mark);
+  });
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -83,7 +101,17 @@ class MyApp extends StatelessWidget {
                 // Initialise responsive sizing before any screen builds, and
                 // rebuild on size / orientation changes.
                 ScreenUtil.init(context);
-                return child ?? const SizedBox.shrink();
+                // Status-bar icon colour for screens without an AppBar
+                // (splash, language picker, onboarding); AppBars override it
+                // through AppBarTheme.systemOverlayStyle.
+                final dark = themeMode == ThemeMode.dark;
+                return AnnotatedRegion<SystemUiOverlayStyle>(
+                  value: (dark
+                          ? SystemUiOverlayStyle.light
+                          : SystemUiOverlayStyle.dark)
+                      .copyWith(statusBarColor: Colors.transparent),
+                  child: child ?? const SizedBox.shrink(),
+                );
               },
               navigatorKey: PushService.navigatorKey,
               scaffoldMessengerKey: PushService.scaffoldMessengerKey,

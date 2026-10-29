@@ -31,7 +31,7 @@ class EmptyState extends StatelessWidget {
           children: [
             Container(
               width: 108.w,
-              height: 108.h,
+              height: 108.w,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
@@ -70,7 +70,7 @@ class EmptyState extends StatelessWidget {
               ElevatedButton(
                 onPressed: onAction,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
+                  backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding:

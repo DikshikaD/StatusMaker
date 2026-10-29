@@ -10,7 +10,6 @@ import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/core/theme/app_theme.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 import 'package:status_maker/features/category/presentation/category_screen.dart';
-import 'package:status_maker/features/community/presentation/community_submission_screen.dart';
 import 'package:status_maker/features/create/presentation/create_screen.dart';
 import 'package:status_maker/features/editor/presentation/status_personalizer_screen.dart';
 import 'package:status_maker/features/explore/presentation/explore_screen.dart';
@@ -25,7 +24,6 @@ final Map<String, Widget Function()> screens = {
   'Favorites': () => const FavoritesScreen(),
   'Notifications': () => const NotificationsScreen(),
   'Settings': () => const SettingsScreen(),
-  'Community': () => const CommunitySubmissionScreen(),
   'Editor (blank)': () => const StatusPersonalizerScreen(
       templateName: 'Test', category: 'Good Morning'),
 };

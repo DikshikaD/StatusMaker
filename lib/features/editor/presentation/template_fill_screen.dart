@@ -14,6 +14,9 @@ import 'package:status_maker/features/editor/presentation/photo_reposition_scree
 import 'package:status_maker/features/editor/utils/editor_export.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 import 'package:status_maker/features/editor/widgets/discard_changes_dialog.dart';
+import 'package:status_maker/features/editor/widgets/editor_action_pill.dart';
+import 'package:status_maker/features/moderation/terms_gate.dart';
+import 'package:status_maker/studio/models/category_model.dart';
 import 'package:status_maker/features/editor/widgets/fixed_template_canvas.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/locked_toolbars.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
@@ -66,6 +69,10 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
 
   bool _exporting = false;
   bool _busy = false;
+
+  /// True only while a capture is being rasterised — the canvas then hides
+  /// the "— Your Name" hint and an unfilled "Add photo" slot.
+  bool _exportMode = false;
   String? _statusId;
 
   /// Whether anything has been changed since the last successful save — drives
@@ -361,6 +368,8 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
         fullscreenDialog: true,
       ),
     );
+    // The screen may have been disposed while the adjuster was open.
+    if (!mounted) return;
     if (result != null) {
       _edit(() {
         _photo = img.copyWith(
@@ -389,13 +398,28 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   }
 
   // ---- save / post / share ----------------------------------------------------
-  /// Deselect first so no selection outline is baked into the export, then wait
-  /// a frame for it to actually be gone before rasterising.
+  /// Deselect first so no selection outline is baked into the export, switch
+  /// the canvas to export mode (placeholders hidden), and wait for a frame
+  /// with that state to actually be painted before rasterising. The editor's
+  /// placeholders come back straight afterwards.
   Future<Uint8List?> _capture() async {
-    if (_selectedId != null) setState(() => _selectedId = null);
-    await WidgetsBinding.instance.endOfFrame;
-    return captureCanvas(_canvasKey);
+    setState(() {
+      _selectedId = null;
+      _exportMode = true;
+    });
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return null;
+      return await captureCanvas(_canvasKey);
+    } finally {
+      if (mounted) setState(() => _exportMode = false);
+    }
   }
+
+  /// The Home chip this design belongs under, or null when none fits.
+  String? get _feedCategory =>
+      feedCategoryFor(_t.studioCategory) ?? feedCategoryFor(_t.theme);
 
   void _ok(String msg) {
     if (mounted) AppSnackBar.success(context, msg);
@@ -408,6 +432,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   String _deriveTitle() {
     for (final t in _texts) {
       final text = t.text.trim();
+      if (FixedTemplateCanvas.isNamePlaceholder(text)) continue;
       if (text.isNotEmpty) {
         final firstLine = text.split('\n').first.trim();
         return firstLine.length > 60 ? firstLine.substring(0, 60) : firstLine;
@@ -460,6 +485,10 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   /// Post makes it public, so it goes to the Home feed it just landed on.
   Future<void> _onPost() async {
     if (_busy) return;
+    // Play UGC policy: the community terms must be accepted before anything
+    // is published. Asked before the busy state / upload starts.
+    if (!await TermsGate.ensureAccepted(context)) return;
+    if (!mounted || _busy) return;
     setState(() => _busy = true);
     try {
       final bytes = await _capture();
@@ -480,7 +509,13 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
       final design = _currentDesign();
       final cleaned = StatusDesign(
         background: design.background,
-        texts: design.texts,
+        // Nor the "— Your Name" hint as if it were the user's own words.
+        texts: [
+          for (final t in design.texts)
+            FixedTemplateCanvas.isNamePlaceholder(t.text)
+                ? t.copyWith(text: '')
+                : t,
+        ],
         images: design.images.where((i) => i.path.isNotEmpty).toList(),
         elements: design.elements,
         frame: design.frame,
@@ -491,6 +526,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
         design: cleaned,
         thumbnailBytes: bytes,
         title: _deriveTitle(),
+        category: _feedCategory,
         makePublic: makePublic,
         existingId: _statusId,
       );
@@ -590,6 +626,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
                             child: FixedTemplateCanvas(
                               design: _currentDesign(),
                               repaintKey: _canvasKey,
+                              exportMode: _exportMode,
                               lineLimits: _t.lineLimits,
                               selectedId: _selectedId,
                               onTextTap: (t) => _select(t.id),
@@ -644,14 +681,14 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
               ),
             ),
           ),
-          _pill(
+          EditorActionPill(
             label: S.t('save'),
             icon: Icons.download_rounded,
             filled: false,
             onTap: _busy ? null : _onSave,
           ),
           SizedBox(width: 6.w),
-          _pill(
+          EditorActionPill(
             label: S.t('post'),
             icon: Icons.public,
             filled: false,
@@ -659,52 +696,13 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
             onTap: _busy ? null : _onPost,
           ),
           SizedBox(width: 6.w),
-          _pill(
+          EditorActionPill(
             label: S.t('share'),
             icon: Icons.ios_share,
             filled: true,
             onTap: _busy ? null : _share,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _pill({
-    required String label,
-    required IconData icon,
-    required bool filled,
-    required VoidCallback? onTap,
-    bool busy = false,
-  }) {
-    final disabled = onTap == null;
-    return Opacity(
-      opacity: disabled && !busy ? 0.5 : 1.0,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Tooltip(
-          message: label,
-          child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 9.h),
-            decoration: BoxDecoration(
-              color: filled ? AppColors.accent : AppColors.cardLight,
-              borderRadius: BorderRadius.circular(30.r),
-            ),
-            child: busy
-                ? SizedBox(
-                    width: 18.w,
-                    height: 18.w,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: filled ? Colors.white : AppColors.textPrimary,
-                    ),
-                  )
-                : Icon(icon,
-                    size: 18.w,
-                    color: filled ? Colors.white : AppColors.textPrimary),
-          ),
-        ),
       ),
     );
   }

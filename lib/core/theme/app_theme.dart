@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:status_maker/core/utils/responsive.dart';
 import 'app_colors.dart';
 import 'app_typography.dart';
@@ -30,15 +31,45 @@ class AppTheme {
     required Color textSecondary,
     required Color border,
   }) {
+    final dark = brightness == Brightness.dark;
+    // Navy primary is invisible on the dark background, and every stock widget
+    // that isn't styled by hand (spinners, text cursors, switch tracks, plain
+    // TextButtons) draws in primary. Dark mode uses the accent instead.
+    final primary = dark ? AppColors.accent : AppColors.primary;
+    // Status-bar icons: dark on the light theme, light on the dark one. Set on
+    // the AppBar theme because an AppBar otherwise guesses from its own
+    // background — and a transparent background reads as "dark", which gave
+    // white icons on the light screens.
+    final overlay = (dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+        .copyWith(statusBarColor: Colors.transparent);
     return ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: ColorScheme.fromSeed(
         seedColor: AppColors.primary,
         brightness: brightness,
-        primary: AppColors.primary,
+        primary: primary,
+        onPrimary: Colors.white,
         secondary: AppColors.accent,
         surface: surface,
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: AppColors.accent,
+        selectionColor: AppColors.accent.withValues(alpha: 0.30),
+        selectionHandleColor: AppColors.accent,
+      ),
+      progressIndicatorTheme:
+          const ProgressIndicatorThemeData(color: AppColors.accent),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected) ? AppColors.accent : null),
+        trackColor: WidgetStateProperty.resolveWith((s) =>
+            s.contains(WidgetState.selected)
+                ? AppColors.accent.withValues(alpha: 0.45)
+                : null),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: AppColors.accent),
       ),
       scaffoldBackgroundColor: background,
       textTheme: AppTypography.textTheme(
@@ -46,6 +77,7 @@ class AppTheme {
         textSecondary: textSecondary,
       ),
       appBarTheme: AppBarTheme(
+        systemOverlayStyle: overlay,
         backgroundColor: background,
         elevation: 0,
         // Without this, Material 3 tints the app bar toward `primary` as content
@@ -63,8 +95,9 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: primary,
           foregroundColor: AppColors.onPrimary,
+          iconColor: AppColors.onPrimary,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30.r),
           ),
@@ -74,7 +107,7 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          foregroundColor: dark ? textPrimary : AppColors.primary,
           side: BorderSide(color: border),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30.r),

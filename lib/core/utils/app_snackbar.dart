@@ -140,15 +140,22 @@ class _TopToastState extends State<_TopToast>
               child: Container(
                 padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: AppColors.accentGradient,
+                  // Errors are red so they can't be mistaken for a
+                  // confirmation; success/info keep the brand gradient.
+                  gradient: LinearGradient(
+                    colors: widget.type == AppSnackType.error
+                        ? const [Color(0xFFD93025), Color(0xFFE5534B)]
+                        : AppColors.accentGradient,
                     begin: Alignment.centerLeft,
                     end: Alignment.centerRight,
                   ),
                   borderRadius: BorderRadius.circular(16.r),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.accent.withValues(alpha: 0.40),
+                      color: (widget.type == AppSnackType.error
+                              ? const Color(0xFFD93025)
+                              : AppColors.accent)
+                          .withValues(alpha: 0.40),
                       blurRadius: 18.r,
                       offset: Offset(0, 6.h),
                     ),

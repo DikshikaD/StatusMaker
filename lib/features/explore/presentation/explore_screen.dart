@@ -82,19 +82,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
       appBar: AppBar(
         title: Text(S.t('explore_title')),
         centerTitle: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(S.t('more_soon')),
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            },
-          ),
-        ],
       ),
       body: SafeArea(
         child: Column(

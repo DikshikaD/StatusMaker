@@ -13,10 +13,16 @@ class StatusCanvas extends StatefulWidget {
   final EditorController controller;
   final GlobalKey repaintKey;
 
+  /// Set only while Save / Post / Share rasterise the canvas: editing-only
+  /// placeholders (an unfilled "Add photo" slot) are left out so they never
+  /// appear in the exported image. The editor shows them the rest of the time.
+  final bool exportMode;
+
   const StatusCanvas({
     super.key,
     required this.controller,
     required this.repaintKey,
+    this.exportMode = false,
   });
 
   @override
@@ -27,6 +33,24 @@ class _StatusCanvasState extends State<StatusCanvas> {
   String? _editingId;
   final TextEditingController _editController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+
+  /// The canvas's real laid-out size, captured each build from the LayoutBuilder
+  /// so [_updateEditLift] can place the edited text relative to it without
+  /// re-measuring.
+  Size _canvasSize = Size.zero;
+
+  /// Tells the screen how far to slide the canvas up so the text being edited
+  /// sits near the top (≈15%) of the canvas — comfortably above the keyboard.
+  /// 0 when not editing; the screen only applies it while the keyboard is open.
+  void _updateEditLift(TextObject t) {
+    final h = _canvasSize.height;
+    if (h <= 0) {
+      widget.controller.editLift.value = 0;
+      return;
+    }
+    final lift = (t.position.dy - h * 0.15).clamp(0.0, h * 0.7);
+    widget.controller.editLift.value = lift;
+  }
 
   @override
   void initState() {
@@ -72,6 +96,7 @@ class _StatusCanvasState extends State<StatusCanvas> {
     _editController.selection =
         TextSelection.collapsed(offset: _editController.text.length);
     setState(() => _editingId = t.id);
+    _updateEditLift(t);
   }
 
   /// Commits whatever is in the inline editor back to the controller.
@@ -82,6 +107,8 @@ class _StatusCanvasState extends State<StatusCanvas> {
   void _commitEditing({bool rebuild = true}) {
     final id = _editingId;
     if (id == null) return;
+    // Let the canvas settle back down now that the keyboard is going away.
+    widget.controller.editLift.value = 0;
     // Closing a text with no content removes it, instead of leaving a blank.
     if (_editController.text.trim().isEmpty) {
       widget.controller.deleteText(id);
@@ -114,6 +141,7 @@ class _StatusCanvasState extends State<StatusCanvas> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final canvasSize = constraints.biggest;
+          _canvasSize = canvasSize;
           return Stack(
             fit: StackFit.expand,
             children: [
@@ -166,7 +194,8 @@ class _StatusCanvasState extends State<StatusCanvas> {
       for (var i = 0; i < c.elements.length; i++)
         (c.elements[i].zIndex, 0, i, _elementLayer(c, c.elements[i], canvasSize)),
       for (var i = 0; i < c.images.length; i++)
-        (c.images[i].zIndex, 1, i, _imageLayer(c, c.images[i], canvasSize)),
+        if (!(widget.exportMode && _isEmptyImage(c.images[i])))
+          (c.images[i].zIndex, 1, i, _imageLayer(c, c.images[i], canvasSize)),
       for (var i = 0; i < c.texts.length; i++)
         (c.texts[i].zIndex, 2, i, _textLayer(c, c.texts[i], canvasSize)),
     ]..sort((a, b) {
@@ -200,6 +229,9 @@ class _StatusCanvasState extends State<StatusCanvas> {
       },
     );
   }
+
+  static bool _isEmptyImage(ImageObject img) =>
+      img.isPlaceholder || img.path.isEmpty;
 
   Widget _imageLayer(EditorController c, ImageObject img, Size canvasSize) {
     return ValueListenableBuilder<String?>(

@@ -4,11 +4,28 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import 'package:status_maker/shared/utils/share_dir.dart';
 import 'package:path_provider/path_provider.dart';
+
+/// The pixel ratio every editor export is rasterised at (see [captureCanvas]).
+const double kExportPixelRatio = 3.0;
+
+/// Upper bound for any decode size, so a zoomed-in photo can't blow memory.
+const int kMaxDecodeWidth = 2048;
+
+/// Decode width for an image drawn [boxWidth] logical px wide on the canvas
+/// and further enlarged by [scale] (in-shape zoom × object scale): enough
+/// pixels to stay sharp in a [kExportPixelRatio] export, clamped to
+/// [kMaxDecodeWidth].
+int exportCacheWidth(double boxWidth, [double scale = 1.0]) {
+  final s = scale.isFinite && scale > 0 ? scale : 1.0;
+  return (boxWidth * kExportPixelRatio * s).round().clamp(1, kMaxDecodeWidth);
+}
 
 /// Rasterises whatever is inside the RepaintBoundary marked by [key] to PNG
 /// bytes. Deselect first so no selection frame is baked into the export.
-Future<Uint8List?> captureCanvas(GlobalKey key, {double pixelRatio = 3.0}) async {
+Future<Uint8List?> captureCanvas(GlobalKey key,
+    {double pixelRatio = kExportPixelRatio}) async {
   final obj = key.currentContext?.findRenderObject();
   if (obj is! RenderRepaintBoundary) return null;
   final image = await obj.toImage(pixelRatio: pixelRatio);
@@ -52,10 +69,9 @@ Future<int> purgeLegacyExports([Directory? dir]) async {
 /// hand to a share target — see `NativeShare.shareImage`, which takes a path
 /// (the native targeted-share channel can't carry raw bytes).
 ///
-/// The cache dir is deliberate: `share_paths.xml` exposes it to the share
-/// FileProvider, and the OS reclaims it without us having to clean up.
+/// Written to [shareDir], the one folder the share FileProvider exposes.
 Future<String> writeTempPng(Uint8List bytes) async {
-  final dir = await getTemporaryDirectory();
+  final dir = await shareDir();
   final file = File('${dir.path}/${_fileName()}');
   await file.writeAsBytes(bytes);
   return file.path;

@@ -30,6 +30,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Names must match kFeedCategories (lib/studio/models/category_model.dart),
+  // which the editors map saved categories onto.
   static const _categories = [
     {'icon': Icons.wb_sunny_outlined, 'name': 'Good Morning'},
     {'icon': Icons.cake_outlined, 'name': 'Birthday'},

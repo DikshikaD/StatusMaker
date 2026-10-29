@@ -12,7 +12,13 @@ class SavedStatus {
   final String? title;
   final String? category;
   final Map<String, dynamic> design;
+  /// Small WebP preview for feed cards (full PNG on rows saved before
+  /// previews existed).
   final String? thumbUrl;
+
+  /// Full-resolution export, for the detail view and Share. Null on older
+  /// rows — use [fullImageUrl].
+  final String? imageUrl;
   final bool isPublic;
   final String? remixOf;
   final int likesCount;
@@ -26,12 +32,17 @@ class SavedStatus {
     this.category,
     this.design = const {},
     this.thumbUrl,
+    this.imageUrl,
     this.isPublic = false,
     this.remixOf,
     this.likesCount = 0,
     this.remixCount = 0,
     this.createdAt,
   });
+
+  /// Best available full-size image: [imageUrl], else [thumbUrl].
+  String? get fullImageUrl =>
+      (imageUrl != null && imageUrl!.isNotEmpty) ? imageUrl : thumbUrl;
 
   /// Decode the stored JSON back into an editable design.
   StatusDesign toDesign() =>
@@ -45,6 +56,7 @@ class SavedStatus {
       category: row['category'] as String?,
       design: (row['design'] as Map?)?.cast<String, dynamic>() ?? const {},
       thumbUrl: row['thumb_url'] as String?,
+      imageUrl: row['image_url'] as String?,
       isPublic: row['is_public'] as bool? ?? false,
       remixOf: row['remix_of'] as String?,
       likesCount: (row['likes_count'] as num?)?.toInt() ?? 0,

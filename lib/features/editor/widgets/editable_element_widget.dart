@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
+import 'package:status_maker/features/editor/utils/editor_export.dart';
 import 'package:status_maker/features/editor/widgets/element_painter.dart';
 import 'package:status_maker/features/editor/widgets/transformable_object.dart';
 
@@ -62,7 +63,8 @@ class EditableElementWidget extends StatelessWidget {
             ? Image.asset(
                 path,
                 fit: BoxFit.contain,
-                cacheWidth: (size.width * 2).round(),
+                // Sharp at the 3x export, including when scaled up.
+                cacheWidth: exportCacheWidth(size.width, element.scale),
                 errorBuilder: (_, __, ___) => const Icon(
                   Icons.broken_image_outlined,
                   color: Colors.white54,

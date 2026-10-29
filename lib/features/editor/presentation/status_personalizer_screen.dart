@@ -18,6 +18,9 @@ import 'package:status_maker/shared/widgets/busy_overlay.dart';
 import 'package:status_maker/shared/widgets/share_target_dialog.dart';
 import 'package:status_maker/features/editor/presentation/photo_reposition_screen.dart';
 import 'package:status_maker/features/editor/widgets/discard_changes_dialog.dart';
+import 'package:status_maker/features/editor/widgets/editor_action_pill.dart';
+import 'package:status_maker/features/moderation/terms_gate.dart';
+import 'package:status_maker/studio/models/category_model.dart';
 import 'package:status_maker/features/editor/widgets/status_canvas.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/add_bar.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/text_toolbar.dart';
@@ -82,6 +85,11 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   final StatusRepository _repo = StatusRepository();
   bool _exporting = false;
   bool _busy = false; // guards the cloud Save/Post actions
+
+  /// True only while a capture is being rasterised: the canvas then hides
+  /// editing-only placeholders (empty "Add photo" slots) so they never end up
+  /// in the exported image.
+  bool _exportMode = false;
 
   /// Id of the row this design is saved under, so Save→Post (or a second Save)
   /// updates the same creation instead of making duplicates.
@@ -292,6 +300,8 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         fullscreenDialog: true,
       ),
     );
+    // The editor (and its controller) may have been disposed meanwhile.
+    if (!mounted) return;
     if (result != null) {
       _controller.setImagePhotoAdjust(
         id,
@@ -355,11 +365,20 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   /// its own to actually appear first — otherwise the UI locks up while still
   /// showing the untouched editor, which is what makes it feel broken rather
   /// than busy.
+  ///
+  /// The canvas is switched to export mode for the capture (placeholders
+  /// hidden) and restored afterwards, so the editor keeps showing them.
   Future<Uint8List?> _capture() async {
     _controller.clearSelection();
-    await WidgetsBinding.instance.endOfFrame;
-    await WidgetsBinding.instance.endOfFrame;
-    return captureCanvas(_canvasKey);
+    setState(() => _exportMode = true);
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return null;
+      return await captureCanvas(_canvasKey);
+    } finally {
+      if (mounted) setState(() => _exportMode = false);
+    }
   }
 
   void _ok(String msg) {
@@ -441,6 +460,10 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       _explainRemixGate();
       return;
     }
+    // Play UGC policy: the user must accept the community terms before
+    // anything is published. Asked before the busy state / upload starts.
+    if (!await TermsGate.ensureAccepted(context)) return;
+    if (!mounted || _busy) return;
     setState(() => _busy = true);
     try {
       final bytes = await _capture();
@@ -497,7 +520,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
         design: design,
         thumbnailBytes: bytes,
         title: _deriveTitle(),
-        category: widget.category.isEmpty ? null : widget.category,
+        // Normalised to a Home chip key — the feed filters on exact equality,
+        // so 'Morning' / 'Suprabhat' would otherwise never show under a chip.
+        category: feedCategoryFor(widget.category),
         makePublic: makePublic,
         existingId: _statusId,
         remixOf: _statusId == null ? widget.remixOf : null,
@@ -562,30 +587,55 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
               children: [
                 _topBar(),
                 Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: reserved),
-                    child: Center(
+                  // While a text is being edited the keyboard would cover a
+                  // low-placed line, so the canvas slides UP by the amount the
+                  // canvas computed (editLift) — only while the keyboard is
+                  // actually open. ClipRect keeps the lifted canvas from
+                  // painting up over the top bar. Full size is kept otherwise
+                  // (no squeeze); it animates back down when editing ends.
+                  child: ClipRect(
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _controller.editLift,
+                      builder: (context, lift, child) {
+                        final dy =
+                            MediaQuery.of(context).viewInsets.bottom > 0
+                                ? lift
+                                : 0.0;
+                        return AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOut,
+                          transform: Matrix4.translationValues(0, -dy, 0),
+                          child: child,
+                        );
+                      },
                       child: Padding(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: 20.w, vertical: 12.h),
-                        child: AspectRatio(
-                          aspectRatio: 9 / 16,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(24.r),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.18),
-                                  blurRadius: 24.r,
-                                  offset: Offset(0, 10.h),
+                        padding: EdgeInsets.only(bottom: reserved),
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 20.w, vertical: 12.h),
+                            child: AspectRatio(
+                              aspectRatio: 9 / 16,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(24.r),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.18),
+                                      blurRadius: 24.r,
+                                      offset: Offset(0, 10.h),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            child: AnimatedBuilder(
-                              animation: _controller,
-                              builder: (_, __) => StatusCanvas(
-                                controller: _controller,
-                                repaintKey: _canvasKey,
+                                child: AnimatedBuilder(
+                                  animation: _controller,
+                                  builder: (_, __) => StatusCanvas(
+                                    controller: _controller,
+                                    repaintKey: _canvasKey,
+                                    exportMode: _exportMode,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -611,82 +661,86 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   }
 
   Widget _topBar() {
-    // Back + Undo + Redo + 3 action pills is a lot to fit on one row. Text
-    // labels on the pills only reliably fit on large screens (tablets) —
-    // on a normal phone width they're the difference between this row and
-    // an overflow, so this measures the row's own available width instead of
-    // guessing from screen size, and drops to icon-only pills (still fully
-    // functional, with a Tooltip for discoverability) whenever labels
-    // wouldn't fit.
+    // Back + Undo + Redo + 3 action pills on one row. The pills stack a short
+    // label under the icon, which keeps them narrow enough for a 360dp phone;
+    // each pill is Flexible so on a very narrow row (or at a huge font scale)
+    // the labels shrink instead of the row overflowing.
     return Padding(
       padding: EdgeInsets.fromLTRB(8.w, 6.h, 12.w, 6.h),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final showLabels = constraints.maxWidth >= 430.w;
-          return Row(
-            children: [
-              _iconBtn(
-                Icons.arrow_back,
-                onPressed: _onBackPressed,
-              ),
-              // Rebuilds on every controller change so the enabled/disabled
-              // state always matches whether there's anything to undo/redo.
-              AnimatedBuilder(
-                animation: _controller,
-                builder: (context, _) => Row(
-                  children: [
-                    _iconBtn(
-                      Icons.undo,
-                      tooltip: S.t('undo'),
-                      onPressed: _controller.canUndo ? _controller.undo : null,
-                    ),
-                    _iconBtn(
-                      Icons.redo,
-                      tooltip: S.t('redo'),
-                      onPressed: _controller.canRedo ? _controller.redo : null,
-                    ),
-                  ],
+      child: Row(
+        children: [
+          _iconBtn(
+            Icons.arrow_back,
+            onPressed: _onBackPressed,
+          ),
+          // Rebuilds on every controller change so the enabled/disabled
+          // state always matches whether there's anything to undo/redo.
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) => Row(
+              children: [
+                _iconBtn(
+                  Icons.undo,
+                  tooltip: S.t('undo'),
+                  onPressed: _controller.canUndo ? _controller.undo : null,
                 ),
-              ),
-              const Spacer(),
-              _pill(
-                label: S.t('save'),
-                icon: Icons.download_rounded,
-                filled: false,
-                showLabel: showLabels,
-                onTap: _busy ? null : _onSave,
-              ),
-              SizedBox(width: 6.w),
-              // Post is the one action that can be blocked by the design's
-              // *content* (an untouched remix), so unlike Save and Share it has
-              // to re-evaluate on every controller change.
-              AnimatedBuilder(
-                animation: _controller,
-                builder: (context, _) {
-                  final blocked = _isUntouchedRemix;
-                  return _pill(
-                    label: S.t('post'),
-                    icon: Icons.public,
+                _iconBtn(
+                  Icons.redo,
+                  tooltip: S.t('redo'),
+                  onPressed: _controller.canRedo ? _controller.redo : null,
+                ),
+              ],
+            ),
+          ),
+          SizedBox(width: 6.w),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Flexible(
+                  child: EditorActionPill(
+                    label: S.t('save'),
+                    icon: Icons.download_rounded,
                     filled: false,
-                    showLabel: showLabels,
-                    disabled: blocked,
-                    // A dead pill just leaves the user tapping at nothing, so a
-                    // blocked Post still answers — it explains itself instead.
-                    onTap: _busy ? null : (blocked ? _explainRemixGate : _onPost),
-                  );
-                },
-              ),
-              SizedBox(width: 6.w),
-              _pill(
-                label: S.t('share'),
-                icon: Icons.ios_share,
-                filled: true,
-                showLabel: showLabels,
-                onTap: _busy ? null : _share,
-              ),
-            ],
-          );
-        },
+                    onTap: _busy ? null : _onSave,
+                  ),
+                ),
+                SizedBox(width: 6.w),
+                // Post is the one action that can be blocked by the design's
+                // *content* (an untouched remix), so unlike Save and Share it
+                // has to re-evaluate on every controller change.
+                Flexible(
+                  child: AnimatedBuilder(
+                    animation: _controller,
+                    builder: (context, _) {
+                      final blocked = _isUntouchedRemix;
+                      return EditorActionPill(
+                        label: S.t('post'),
+                        icon: Icons.public,
+                        filled: false,
+                        disabled: blocked,
+                        // A dead pill just leaves the user tapping at nothing,
+                        // so a blocked Post still answers — it explains itself.
+                        onTap: _busy
+                            ? null
+                            : (blocked ? _explainRemixGate : _onPost),
+                      );
+                    },
+                  ),
+                ),
+                SizedBox(width: 6.w),
+                Flexible(
+                  child: EditorActionPill(
+                    label: S.t('share'),
+                    icon: Icons.ios_share,
+                    filled: true,
+                    onTap: _busy ? null : _share,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -706,57 +760,6 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       padding: EdgeInsets.zero,
       constraints: BoxConstraints(minWidth: 40.w, minHeight: 40.w),
       visualDensity: VisualDensity.compact,
-    );
-  }
-
-  /// A top-bar action pill. Deliberately has no busy state of its own: while an
-  /// action is running the pill just dims (it's disabled), and the single loader
-  /// in the middle of the screen is what reports progress.
-  Widget _pill({
-    required String label,
-    required IconData icon,
-    required bool filled,
-    required VoidCallback? onTap,
-    bool showLabel = true,
-
-    /// Dims the pill *without* swallowing the tap, so an unavailable action can
-    /// still say why it's unavailable instead of silently ignoring the user.
-    bool disabled = false,
-  }) {
-    final dim = disabled || onTap == null;
-    final content = Container(
-      padding: EdgeInsets.symmetric(
-          horizontal: showLabel ? 14.w : 10.w, vertical: 9.h),
-      decoration: BoxDecoration(
-        color: filled ? AppColors.accent : AppColors.cardLight,
-        borderRadius: BorderRadius.circular(30.r),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon,
-              size: 18.w,
-              color: filled ? Colors.white : AppColors.textPrimary),
-          if (showLabel) ...[
-            SizedBox(width: 6.w),
-            Text(
-              label,
-              style: TextStyle(
-                  color: filled ? Colors.white : AppColors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14.sp),
-            ),
-          ],
-        ],
-      ),
-    );
-    return Opacity(
-      opacity: dim ? 0.5 : 1.0,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: showLabel ? content : Tooltip(message: label, child: content),
-      ),
     );
   }
 

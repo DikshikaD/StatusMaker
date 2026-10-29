@@ -398,6 +398,15 @@ class _MyCreationsTabState extends State<_MyCreationsTab>
         icon: Icons.brush_outlined,
         title: S.t('creations_empty_title'),
         message: S.t('creations_empty_msg'),
+        actionLabel: S.t('start_creating'),
+        onAction: () => Navigator.push(
+          context,
+          FadeSlidePageRoute(
+            page: const StatusPersonalizerScreen(templateName: 'New Status'),
+          ),
+        ).then((_) {
+          if (mounted) _load();
+        }),
       );
     }
 

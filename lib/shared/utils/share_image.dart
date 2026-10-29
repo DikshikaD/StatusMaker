@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:status_maker/shared/utils/share_dir.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:status_maker/shared/utils/native_share.dart';
 
@@ -13,16 +13,19 @@ import 'package:status_maker/shared/utils/native_share.dart';
 /// HttpClient directly (this is the app fetching its own asset, not the
 /// assistant's restricted web tools).
 Future<String?> downloadImageToTemp(String url) async {
-  final client = HttpClient();
+  // Bounded: on a flaky network the share spinner used to hang for minutes.
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
   try {
     final request = await client.getUrl(Uri.parse(url));
-    final response = await request.close();
+    final response =
+        await request.close().timeout(const Duration(seconds: 20));
     if (response.statusCode != 200) {
       throw HttpException('status ${response.statusCode}');
     }
-    final bytes = await consolidateHttpClientResponseBytes(response);
+    final bytes = await consolidateHttpClientResponseBytes(response)
+        .timeout(const Duration(seconds: 30));
 
-    final dir = await getTemporaryDirectory();
+    final dir = await shareDir();
     final file = File(
         '${dir.path}/share_${DateTime.now().millisecondsSinceEpoch}.png');
     await file.writeAsBytes(bytes);

@@ -191,3 +191,36 @@ const Map<String, String> kThemeToStudioCategory = {
 };
 
 String? studioCategoryForTheme(String? theme) => kThemeToStudioCategory[theme];
+
+/// The category keys the Home feed's chips filter on (exact `category`
+/// equality). Must stay in step with `_HomeScreenState._categories`.
+const List<String> kFeedCategories = [
+  'Good Morning',
+  'Birthday',
+  'Festival',
+  'Motivation',
+  'Love',
+];
+
+/// Studio category id → the Home chip it belongs under. Ids with no fitting
+/// chip are deliberately absent (saved as no category, shown under "All").
+const Map<String, String> _studioToFeedCategory = {
+  'morning': 'Good Morning',
+  'birthday': 'Birthday',
+  'festival': 'Festival',
+  'motivation': 'Motivation',
+  'success': 'Motivation',
+  'love': 'Love',
+};
+
+/// Normalises any category-ish value the editors carry — a Home chip key, a
+/// theme / legacy quote-category name ('Morning', 'Suprabhat', …) or a studio
+/// category id ('morning') — to one of [kFeedCategories], so a posted status
+/// shows up under the matching Home chip. Null when nothing fits.
+String? feedCategoryFor(String? value) {
+  final v = value?.trim();
+  if (v == null || v.isEmpty) return null;
+  if (kFeedCategories.contains(v)) return v;
+  final id = kThemeToStudioCategory[v] ?? v.toLowerCase();
+  return _studioToFeedCategory[id];
+}

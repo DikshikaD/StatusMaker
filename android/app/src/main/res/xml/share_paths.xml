@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Files the app may hand to other apps (WhatsApp/Instagram/Facebook) via the
-     share FileProvider. Exported status PNGs are written to the cache dir by
-     editor_export.dart's writeTempPng(). -->
+<!-- The only files the app hands to other apps (WhatsApp/Instagram/Facebook)
+     via the share FileProvider: <cache>/share/, written by shareDir() in
+     lib/shared/utils/share_dir.dart. Nothing else in internal storage (session
+     prefs, databases) is reachable through a content:// URI. -->
 <paths>
-    <cache-path name="shared_cache" path="." />
-    <files-path name="shared_files" path="." />
-    <external-cache-path name="shared_external_cache" path="." />
+    <cache-path name="shared_cache" path="share/" />
 </paths>

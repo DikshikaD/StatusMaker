@@ -5,12 +5,15 @@ import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
@@ -77,9 +80,54 @@ class MainActivity : FlutterActivity() {
                             result.success(shareImage(path, target, text))
                         }
                     }
+                    "encodePreview" -> {
+                        val bytes = call.argument<ByteArray>("bytes")
+                        val maxWidth = call.argument<Int>("maxWidth") ?: 540
+                        val quality = call.argument<Int>("quality") ?: 80
+                        if (bytes == null) {
+                            result.error("bad_args", "bytes is required", null)
+                        } else {
+                            // Off the main thread: decoding + encoding a
+                            // 1080x1920 image takes ~100 ms on a mid-range phone.
+                            Thread {
+                                val out = try {
+                                    encodePreview(bytes, maxWidth, quality)
+                                } catch (e: Exception) {
+                                    null
+                                }
+                                runOnUiThread { result.success(out) }
+                            }.start()
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    /**
+     * Downscales an exported PNG to [maxWidth] and re-encodes it as lossy WebP
+     * for the feed: ~40 KB instead of a 1–2 MB PNG. Flutter can only encode
+     * PNG, and Android's own encoder avoids pulling in an image package.
+     */
+    private fun encodePreview(bytes: ByteArray, maxWidth: Int, quality: Int): ByteArray? {
+        val source = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        val scaled = if (source.width > maxWidth) {
+            val height = (source.height.toLong() * maxWidth / source.width).toInt()
+            Bitmap.createScaledBitmap(source, maxWidth, height, true)
+        } else {
+            source
+        }
+        val format = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Bitmap.CompressFormat.WEBP_LOSSY
+        } else {
+            @Suppress("DEPRECATION")
+            Bitmap.CompressFormat.WEBP
+        }
+        val stream = ByteArrayOutputStream()
+        scaled.compress(format, quality, stream)
+        if (scaled !== source) scaled.recycle()
+        source.recycle()
+        return stream.toByteArray()
     }
 
     /**

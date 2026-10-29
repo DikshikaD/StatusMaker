@@ -15,11 +15,13 @@
 // The service-account JSON is a credential: keep it out of git and out of chat —
 // set it as a secret in the dashboard or with the CLI above.
 //
-// verify_jwt stays ON (the default) for this function, and the handler then
-// also requires the service-role key (see isServiceRole): every app user holds
-// a valid project JWT too, so verify_jwt on its own would let them through.
-// The trigger presents the service-role key as its bearer token, so legitimate
-// calls pass.
+// The handler accepts only the exact key the trigger presents (see
+// isTrustedCaller): every app user holds a valid project JWT, so verify_jwt
+// on its own would let them through. Recommended setup:
+//   supabase secrets set NOTIFY_HOOK_SECRET="<long random string>"
+//   select vault.create_secret('<same string>', 'notify_on_like_key');
+// Without NOTIFY_HOOK_SECRET the function falls back to the service-role key,
+// which then must be what the Vault secret holds.
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -163,32 +165,40 @@ async function sendPush(
 // ---- handler ---------------------------------------------------------------
 
 /**
- * True only for the service-role caller (the pg_net trigger, or a Database
- * Webhook configured with that key).
+ * True only for the trusted caller: the pg_net trigger (or a Database Webhook)
+ * presenting the exact key stored in Vault as `notify_on_like_key`.
  *
- * verify_jwt alone is NOT enough: it accepts any token signed by this project,
- * including the session every anonymous app user gets — so without this check
- * anyone could POST a hand-made record and push to any user id. The gateway
- * has already verified the signature, so reading the role claim is safe.
+ * Exact comparison only. An earlier version also accepted any JWT whose payload
+ * said role=service_role; that is only safe while verify_jwt is on, and with
+ * the new non-JWT API keys the function is often deployed with
+ * --no-verify-jwt, at which point a hand-made unsigned token would pass.
+ *
+ * The expected key is NOTIFY_HOOK_SECRET when set (recommended: a random
+ * string, also stored as the Vault secret), else the project's service-role
+ * key.
  */
-function isServiceRole(req: Request): boolean {
+function isTrustedCaller(req: Request): boolean {
   const auth = req.headers.get('Authorization') ?? '';
   const token = auth.replace(/^Bearer\s+/i, '');
-  if (!token) return false;
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (serviceKey && token === serviceKey) return true;
-  try {
-    const part = token.split('.')[1];
-    if (!part) return false;
-    const json = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
-    return JSON.parse(json).role === 'service_role';
-  } catch {
-    return false;
+  const expected =
+    Deno.env.get('NOTIFY_HOOK_SECRET') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!token || !expected) return false;
+  return timingSafeEqual(token, expected);
+}
+
+/** Constant-time string comparison, so the key can't be guessed by timing. */
+function timingSafeEqual(a: string, b: string): boolean {
+  const x = new TextEncoder().encode(a);
+  const y = new TextEncoder().encode(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
   }
+  return diff === 0;
 }
 
 Deno.serve(async (req) => {
-  if (!isServiceRole(req)) {
+  if (!isTrustedCaller(req)) {
     return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 });
   }
   try {

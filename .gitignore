@@ -48,3 +48,6 @@ service-account.json
 android/key.properties
 *.jks
 *.keystore
+
+# Supabase CLI local state (project ref, pooler user)
+supabase/.temp/

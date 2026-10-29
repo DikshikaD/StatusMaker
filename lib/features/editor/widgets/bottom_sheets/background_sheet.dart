@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:status_maker/core/utils/app_snackbar.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
@@ -394,9 +395,7 @@ class _BackgroundSheetState extends State<BackgroundSheet> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _busyUrl = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(S.t('background_download_failed'))),
-      );
+      AppSnackBar.error(context, S.t('background_download_failed'));
       return;
     }
     if (!mounted) return;

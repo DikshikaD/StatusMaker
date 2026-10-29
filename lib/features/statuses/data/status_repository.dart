@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:status_maker/core/supabase/supabase_config.dart';
@@ -166,8 +167,14 @@ class StatusRepository {
     final designJson = design.toJson();
     await _uploadEmbeddedImages(designJson, uid);
 
-    // (3) Thumbnail.
-    final thumbUrl = await _uploadThumbnail(thumbnailBytes, uid);
+    // (3) Images: the full export (detail view, Share) and a small WebP
+    // preview for the feed. Without a preview (encoder unavailable) the feed
+    // falls back to the full image, as it did before.
+    final imageUrl = await _uploadThumbnail(thumbnailBytes, uid, 'png');
+    final preview = await _encodePreview(thumbnailBytes);
+    final thumbUrl = preview == null
+        ? imageUrl
+        : await _uploadThumbnail(preview, uid, 'webp');
 
     // (4/5) Insert or update the row.
     final payload = <String, dynamic>{
@@ -176,6 +183,7 @@ class StatusRepository {
       'category': (category == null || category.isEmpty) ? null : category,
       'design': designJson,
       'thumb_url': thumbUrl,
+      'image_url': imageUrl,
       // Post always publishes; a fresh insert takes makePublic as-is. But a
       // plain Save on an existing row must NOT touch is_public — otherwise
       // editing an already-posted status and tapping Save would silently
@@ -185,17 +193,24 @@ class StatusRepository {
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
 
+    Future<Map<String, dynamic>> write(Map<String, dynamic> p) =>
+        existingId != null
+            ? _db.from(_table).update(p).eq('id', existingId).select().single()
+            : _db.from(_table).insert(p).select().single();
+
     try {
-      final Map<String, dynamic> row;
-      if (existingId != null) {
-        row = await _db
-            .from(_table)
-            .update(payload)
-            .eq('id', existingId)
-            .select()
-            .single();
-      } else {
-        row = await _db.from(_table).insert(payload).select().single();
+      Map<String, dynamic> row;
+      try {
+        row = await write(payload);
+      } on PostgrestException catch (e) {
+        // Database not migrated yet (no image_url column, see
+        // migrations/0004): save the old way — the feed just shows the full
+        // image instead of the preview — rather than failing the save.
+        if (e.code != 'PGRST204' || !e.message.contains('image_url')) rethrow;
+        payload
+          ..remove('image_url')
+          ..['thumb_url'] = imageUrl;
+        row = await write(payload);
       }
       return SavedStatus.fromRow(row);
     } catch (e) {
@@ -447,14 +462,41 @@ class StatusRepository {
   // Storage helpers
   // ---------------------------------------------------------------------------
 
-  Future<String> _uploadThumbnail(Uint8List bytes, String uid) async {
-    final path = '$uid/${_uniqueName('png')}';
+  /// File names are unique per upload and never rewritten, so devices and the
+  /// CDN may cache them for a year. (The default was one hour.)
+  static const _immutable = '31536000';
+
+  Future<String> _uploadThumbnail(Uint8List bytes, String uid, String ext) async {
+    final path = '$uid/${_uniqueName(ext)}';
     await _db.storage.from(_thumbsBucket).uploadBinary(
           path,
           bytes,
-          fileOptions: const FileOptions(contentType: 'image/png', upsert: true),
+          fileOptions: FileOptions(
+            contentType: 'image/$ext',
+            cacheControl: _immutable,
+            upsert: true,
+          ),
         );
     return _db.storage.from(_thumbsBucket).getPublicUrl(path);
+  }
+
+  static const MethodChannel _native =
+      MethodChannel('status_maker/native_share');
+
+  /// ~540 px lossy WebP of the export, made by MainActivity.encodePreview.
+  /// Null when unavailable (non-Android, or the encoder failed).
+  static Future<Uint8List?> _encodePreview(Uint8List png) async {
+    if (!Platform.isAndroid) return null;
+    try {
+      return await _native.invokeMethod<Uint8List>('encodePreview', {
+        'bytes': png,
+        'maxWidth': 540,
+        'quality': 80,
+      });
+    } catch (e) {
+      debugPrint('StatusRepository preview encode failed: $e');
+      return null;
+    }
   }
 
   /// Walks the design JSON, uploads every embedded *local* photo to
@@ -540,6 +582,7 @@ class StatusRepository {
             bytes,
             fileOptions: FileOptions(
               contentType: 'image/${safeExt == 'jpg' ? 'jpeg' : safeExt}',
+              cacheControl: _immutable,
               upsert: true,
             ),
           );

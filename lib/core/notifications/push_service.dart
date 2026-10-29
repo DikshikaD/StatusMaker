@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/notifications/push_banner.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
+import 'package:status_maker/core/utils/first_run.dart';
 import 'package:status_maker/core/utils/page_transitions.dart';
 import 'package:status_maker/features/preview/presentation/template_detail_screen.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
@@ -20,7 +21,11 @@ import 'package:status_maker/features/statuses/data/status_repository.dart';
 /// ```
 const String _tag = '[PUSH]';
 
-void _log(String message) => debugPrint('$_tag $message');
+void _log(String message) {
+  // Release builds stay quiet: logcat is readable by anyone with adb, and
+  // these lines are only useful while developing.
+  if (kDebugMode) debugPrint('$_tag $message');
+}
 
 /// Handles a push that arrives while the app is fully closed or backgrounded.
 ///
@@ -82,6 +87,18 @@ class PushService {
 
   /// Call once in main(), after [SupabaseService.init] — registration needs a
   /// user id to attach the token to.
+  /// Asks for the notification permission. Called once onboarding is done; if
+  /// Firebase isn't up yet, [init] asks instead (it sees FirstRun.done).
+  static Future<void> requestPermission() async {
+    if (!Platform.isAndroid || !_initialized) return;
+    try {
+      final settings = await FirebaseMessaging.instance.requestPermission();
+      _log('🔔 permission: ${settings.authorizationStatus.name}');
+    } catch (e) {
+      _log('⚠️  permission request failed: $e');
+    }
+  }
+
   static Future<void> init() async {
     _log('──────── push init ────────');
 
@@ -106,15 +123,20 @@ class PushService {
 
       final messaging = FirebaseMessaging.instance;
 
-      // Android 13+ shows the system permission dialog here. Older versions
-      // return authorized immediately.
-      final settings = await messaging.requestPermission();
-      _log('🔔 permission: ${settings.authorizationStatus.name}');
-      if (settings.authorizationStatus == AuthorizationStatus.denied) {
-        _log('❌ user denied notifications — no push will be delivered. '
-            'Enable it in Android Settings → Apps → Status Maker → '
-            'Notifications.');
-        return;
+      // Android 13+ shows the system permission dialog here. Not on the very
+      // first launch, though: a permission prompt before the user has even
+      // picked a language is unexplained (and usually refused). New users are
+      // asked when onboarding finishes — see [requestPermission]. The token
+      // below works either way; notifications just stay silent until allowed.
+      if (FirstRun.done) {
+        final settings = await messaging.requestPermission();
+        _log('🔔 permission: ${settings.authorizationStatus.name}');
+        if (settings.authorizationStatus == AuthorizationStatus.denied) {
+          _log('❌ user denied notifications — no push will be delivered. '
+              'Enable it in Android Settings → Apps → Status Maker → '
+              'Notifications.');
+          return;
+        }
       }
 
       _log('⏳ requesting FCM token…');

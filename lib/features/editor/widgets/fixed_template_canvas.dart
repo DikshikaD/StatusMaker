@@ -5,6 +5,7 @@ import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/fixed_templates.dart';
 import 'package:status_maker/features/editor/data/status_design.dart';
 import 'package:status_maker/features/editor/utils/canvas_image.dart';
+import 'package:status_maker/features/editor/utils/editor_export.dart';
 import 'package:status_maker/features/editor/utils/image_shape_utils.dart';
 import 'package:status_maker/features/editor/utils/text_style_builder.dart';
 import 'package:status_maker/features/editor/widgets/element_painter.dart';
@@ -46,6 +47,11 @@ class FixedTemplateCanvas extends StatelessWidget {
   /// Unlimited when null or when a slot has no entry.
   final Map<String, int>? lineLimits;
 
+  /// Set only while the editor rasterises the canvas for Save / Post / Share:
+  /// editing-only placeholders — an unfilled "Add photo" slot and the
+  /// "— Your Name" hint in an empty name slot — are left out of the image.
+  final bool exportMode;
+
   const FixedTemplateCanvas({
     super.key,
     required this.design,
@@ -56,7 +62,14 @@ class FixedTemplateCanvas extends StatelessWidget {
     this.onBackgroundTap,
     this.selectedId,
     this.lineLimits,
+    this.exportMode = false,
   });
+
+  static bool _isEmptyImage(ImageObject img) =>
+      img.isPlaceholder || img.path.isEmpty;
+
+  /// The localized name hint [FixedTemplate.design] puts in an empty name slot.
+  static bool isNamePlaceholder(String text) => text == S.t('name_placeholder');
 
   @override
   Widget build(BuildContext context) {
@@ -65,35 +78,40 @@ class FixedTemplateCanvas extends StatelessWidget {
       child: SizedBox(
         width: kFixedCanvasSize.width,
         height: kFixedCanvasSize.height,
-        child: RepaintBoundary(
-          key: repaintKey,
-          child: Stack(
-            fit: StackFit.expand,
-            clipBehavior: Clip.none,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: TemplateBackground(
+        // The rounded corners are an on-screen nicety only. The clip sits
+        // OUTSIDE the RepaintBoundary, so the exported PNG stays square with
+        // fully opaque corners (transparent ones show as black in WhatsApp).
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: RepaintBoundary(
+            key: repaintKey,
+            child: Stack(
+              fit: StackFit.expand,
+              clipBehavior: Clip.none,
+              children: [
+                TemplateBackground(
                   state: design.background,
                   onTap: onBackgroundTap ?? () {},
                 ),
-              ),
-              ...design.elements.map(_element),
-              ...design.images.map(_image),
-              ...design.texts.map(_text),
-              if (design.frame != StatusFrame.none)
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: CustomPaint(
-                      painter: FramePainter(
-                        frame: design.frame,
-                        color: design.frameColor,
-                        width: design.frameWidth,
+                ...design.elements.map(_element),
+                ...design.images
+                    .where((i) => !(exportMode && _isEmptyImage(i)))
+                    .map(_image),
+                ...design.texts.map(_text),
+                if (design.frame != StatusFrame.none)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(
+                        painter: FramePainter(
+                          frame: design.frame,
+                          color: design.frameColor,
+                          width: design.frameWidth,
+                        ),
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -180,7 +198,9 @@ class FixedTemplateCanvas extends StatelessWidget {
                 )
               : null,
           child: Text(
-            t.text.isEmpty ? ' ' : t.text,
+            t.text.isEmpty || (exportMode && isNamePlaceholder(t.text))
+                ? ' '
+                : t.text,
             textAlign: t.textAlign,
             style: buildTextStyle(t),
             maxLines: lineLimits?[t.id],
@@ -193,7 +213,7 @@ class FixedTemplateCanvas extends StatelessWidget {
 
   Widget _image(ImageObject img) {
     final size = baseSizeForImageShape(img.shape);
-    final bool empty = img.isPlaceholder || img.path.isEmpty;
+    final bool empty = _isEmptyImage(img);
 
     Widget content;
     if (empty) {
@@ -223,8 +243,9 @@ class FixedTemplateCanvas extends StatelessWidget {
             width: size.width,
             height: size.height,
             fit: BoxFit.cover,
+            // Enough pixels for the 3x export at this zoom, capped.
             cacheWidth:
-                (size.width * 2 * img.photoScale).round().clamp(1, 2400),
+                exportCacheWidth(size.width, img.photoScale * img.scale),
             errorBuilder: (_, __, ___) => Container(
               width: size.width,
               height: size.height,
@@ -289,7 +310,7 @@ class FixedTemplateCanvas extends StatelessWidget {
               ? Image.asset(
                   el.assetPath!,
                   fit: BoxFit.contain,
-                  cacheWidth: (size.width * 2).round(),
+                  cacheWidth: exportCacheWidth(size.width, el.scale),
                   errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                 )
               : CustomPaint(

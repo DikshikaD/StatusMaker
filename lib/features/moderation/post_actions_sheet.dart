@@ -17,12 +17,15 @@ Future<PostAction> showPostActionsSheet(
     BuildContext context, SavedStatus status) async {
   final choice = await showModalBottomSheet<String>(
     context: context,
+    // Scrollable so every option stays reachable in landscape, on short
+    // screens and at large system font scales.
+    isScrollControlled: true,
     backgroundColor: AppColors.surface,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
     ),
     builder: (sheetContext) => SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: EdgeInsets.symmetric(vertical: 12.h),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -57,18 +60,21 @@ Future<PostAction> showPostActionsSheet(
 Future<PostAction> _report(BuildContext context, SavedStatus status) async {
   final reason = await showModalBottomSheet<ReportReason>(
     context: context,
+    // Scrollable so every option stays reachable in landscape, on short
+    // screens and at large system font scales.
+    isScrollControlled: true,
     backgroundColor: AppColors.surface,
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
     ),
     builder: (sheetContext) => SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: EdgeInsets.symmetric(vertical: 12.h),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Padding(
-              padding: EdgeInsets.fromLTRB(20.w, 4.h, 20.w, 8.h),
+              padding: EdgeInsets.fromLTRB(16, 4.h, 16, 8.h),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(

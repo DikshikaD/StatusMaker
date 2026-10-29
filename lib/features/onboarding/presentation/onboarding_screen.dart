@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/localization/strings.dart';
+import 'package:status_maker/core/notifications/push_service.dart';
 import 'package:status_maker/features/home/presentation/main_layout.dart';
 import 'package:status_maker/core/utils/app_navigation.dart';
 import 'package:status_maker/core/utils/first_run.dart';
@@ -78,6 +79,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   void _goToApp() {
     FirstRun.markDone();
+    // Now that the user knows what the app is, ask about notifications.
+    PushService.requestPermission();
     Navigator.of(context).pushReplacement(
       FadeSlidePageRoute(
         page: const MainLayout(),
@@ -151,6 +154,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       final scale = 1 - delta * 0.14;
                       final bob = math.sin(_floatController.value * math.pi * 2);
 
+                      return LayoutBuilder(builder: (context, box) {
+                      final pageHeight = box.maxHeight;
                       return Opacity(
                         opacity: (1 - delta).clamp(0.0, 1.0),
                         child: Padding(
@@ -159,13 +164,23 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const Spacer(),
-                              Transform.translate(
-                                offset: Offset(0, bob * 8.h),
-                                child: Transform.scale(
-                                  scale: scale,
-                                  child: SizedBox(
-                                    height: 320.h,
-                                    child: Center(child: step.builder(bob)),
+                              // Capped at half the page: on a short screen or
+                              // at a large system font size the illustration
+                              // shrinks instead of pushing the text off it.
+                              SizedBox(
+                                height: math.min(320.h, pageHeight * 0.5),
+                                child: Transform.translate(
+                                  offset: Offset(0, bob * 8.h),
+                                  child: Transform.scale(
+                                    scale: scale,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: SizedBox(
+                                        height: 320.h,
+                                        width: 320.w,
+                                        child: Center(child: step.builder(bob)),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -203,6 +218,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           ),
                         ),
                       );
+                      });
                     },
                   );
                 },
@@ -255,9 +271,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         ),
                       ),
                       SizedBox(width: 8.w),
+                      // Explicit white: the button's default icon colour is
+                      // the theme's navy primary, which drew a black arrow.
                       Icon(
                         isLast ? Icons.check_rounded : Icons.arrow_forward,
                         size: 18.w,
+                        color: Colors.white,
                       ),
                     ],
                   ),

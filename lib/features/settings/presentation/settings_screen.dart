@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:status_maker/core/constants/app_version.dart';
+import 'package:status_maker/core/constants/legal_urls.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/localization/strings.dart';
@@ -29,11 +31,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const _packageId = 'com.appbedev.statusmaker';
   static const _storeUrl =
       'https://play.google.com/store/apps/details?id=$_packageId';
-
-  /// Hosted legal pages. Also the URLs to give the Play Console / App Store
-  /// listing, so the store and the app point at the same documents.
-  static const _privacyUrl = 'https://dikshikad.github.io/StatusMaker/privacy.html';
-  static const _termsUrl = 'https://dikshikad.github.io/StatusMaker/terms.html';
 
   /// Opens [url] in the browser rather than an in-app view, so the page gets
   /// the browser's own back button and address bar.
@@ -162,7 +159,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           SizedBox(height: 32.h),
           _sectionTitle(S.t('notifications')),
-          SizedBox(height: 4.h),
           SizedBox(height: 14.h),
           _notificationsTile(),
 
@@ -172,12 +168,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _row(Icons.star_outline, S.t('rate_us'), onTap: _rateUs),
           _row(Icons.ios_share, S.t('share_app'), onTap: _shareApp),
           _row(Icons.privacy_tip_outlined, S.t('privacy_policy'),
-              onTap: () => _openUrl(_privacyUrl)),
+              onTap: () => _openUrl(LegalUrls.privacy)),
           _row(Icons.description_outlined, S.t('terms_conditions'),
-              onTap: () => _openUrl(_termsUrl)),
+              onTap: () => _openUrl(LegalUrls.terms)),
           _row(Icons.delete_forever_outlined, S.t('delete_my_data'),
-              onTap: _deleteMyData),
-          _row(Icons.info_outline, '${S.t('version')}  1.0.0'),
+              onTap: _deleteMyData, destructive: true),
+          _row(Icons.info_outline, '${S.t('version')}  $kAppVersion'),
         ],
       ),
           BusyOverlay(busy: _deleting),
@@ -325,12 +321,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _row(IconData icon, String label, {VoidCallback? onTap}) {
+  Widget _row(IconData icon, String label,
+      {VoidCallback? onTap, bool destructive = false}) {
+    const danger = Color(0xFFD93025);
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, color: AppColors.textSecondary),
+      leading: Icon(icon, color: destructive ? danger : AppColors.textSecondary),
       title: Text(label,
-          style: TextStyle(fontSize: 15.sp, color: AppColors.textPrimary)),
+          style: TextStyle(
+              fontSize: 15.sp,
+              color: destructive ? danger : AppColors.textPrimary)),
       trailing: onTap != null
           ? Icon(Icons.chevron_right, color: AppColors.textSecondary)
           : null,

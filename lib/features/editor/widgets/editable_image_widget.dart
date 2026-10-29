@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/utils/canvas_image.dart';
+import 'package:status_maker/features/editor/utils/editor_export.dart';
 import 'package:status_maker/features/editor/utils/image_shape_utils.dart';
 import 'package:status_maker/features/editor/widgets/photo_frame_painter.dart';
 import 'package:status_maker/features/editor/widgets/transformable_object.dart';
@@ -59,13 +60,12 @@ class EditableImageWidget extends StatelessWidget {
             width: size.width,
             height: size.height,
             fit: BoxFit.cover,
-            // Decode at the resolution actually shown on screen (scaled up a
-            // little extra to stay sharp when the user zooms in via the photo
-            // reposition screen) instead of the full camera resolution —
-            // massively lowers memory per photo.
-            cacheWidth: (size.width * 2 * image.photoScale)
-                .round()
-                .clamp(1, 2400),
+            // Decode at the resolution the 3x export actually needs (box width
+            // × export pixel ratio × in-shape zoom × object scale) instead of
+            // the full camera resolution — sharp in the PNG, but capped so
+            // memory per photo stays bounded.
+            cacheWidth: exportCacheWidth(
+                size.width, image.photoScale * image.scale),
             errorBuilder: (_, __, ___) => Container(
               width: size.width,
               height: size.height,

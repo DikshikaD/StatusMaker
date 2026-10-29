@@ -468,6 +468,13 @@ class EditorController extends ChangeNotifier {
   /// keyboard, then resets this to null.
   final ValueNotifier<String?> editRequest = ValueNotifier<String?>(null);
 
+  /// How far (in logical px) the editor should slide the canvas UP so the text
+  /// currently being edited clears the on-screen keyboard. 0 when not editing.
+  /// The canvas computes it (it knows the edited text's position and the real
+  /// laid-out canvas size); the screen reads it and translates the canvas.
+  /// Kept off [notifyListeners] so it never triggers a canvas rebuild.
+  final ValueNotifier<double> editLift = ValueNotifier<double>(0);
+
   /// Kept separate from [notifyListeners] so selecting/deselecting only rebuilds
   /// selection frames + the contextual toolbar — never the whole canvas.
   final ValueNotifier<String?> selectedId = ValueNotifier<String?>(null);
@@ -603,6 +610,7 @@ class EditorController extends ChangeNotifier {
   void dispose() {
     selectedId.dispose();
     editRequest.dispose();
+    editLift.dispose();
     isDirty.dispose();
     super.dispose();
   }

@@ -44,6 +44,10 @@ class EditableTextWidget extends StatelessWidget {
       boxWidth: textObject.effectiveBoxWidth,
       onSelect: onSelect,
       onDelete: onDelete,
+      // Single tap opens the keyboard straight away (double-tap kept as a
+      // familiar alias). Dragging still just selects + moves, because the
+      // move gesture calls onSelect on start, not onTap.
+      onTap: onEdit,
       onDoubleTap: onEdit,
       onTransformEnd: onTransformEnd,
       child: Container(

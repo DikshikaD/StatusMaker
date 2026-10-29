@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
 import 'package:status_maker/core/constants/app_dimensions.dart';
@@ -47,7 +48,7 @@ class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
   }
 
   Future<void> _share() async {
-    final url = widget.status.thumbUrl;
+    final url = widget.status.fullImageUrl;
     if (url == null || url.isEmpty || _sharing) return;
     final target = await showShareTargetDialog(context);
     if (target == null || !mounted) return;
@@ -120,7 +121,7 @@ class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
               child: Center(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(AppDimensions.radiusLarge),
-                  child: (s.thumbUrl == null || s.thumbUrl!.isEmpty)
+                  child: (s.fullImageUrl == null || s.fullImageUrl!.isEmpty)
                       ? Container(
                           color: AppColors.cardLight,
                           height: MediaQuery.of(context).size.height * 0.65,
@@ -129,12 +130,16 @@ class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
                           child: Icon(Icons.image_outlined,
                               color: AppColors.textSecondary, size: 40.w),
                         )
-                      : Image.network(
-                          s.thumbUrl!,
+                      // Disk-cached like the feed (Image.network re-downloaded
+                      // the full image on every open), at full resolution.
+                      : Image(
+                          image: ResizeImage(
+                            CachedNetworkImageProvider(s.fullImageUrl!),
+                            width: 1080,
+                          ),
                           fit: BoxFit.cover,
                           height: MediaQuery.of(context).size.height * 0.65,
                           width: double.infinity,
-                          cacheWidth: 1080,
                           frameBuilder: (context, child, frame, wasSync) {
                             if (wasSync) return child;
                             return AnimatedOpacity(
@@ -231,7 +236,10 @@ class _TemplateDetailScreenState extends State<TemplateDetailScreen> {
                 // pencil has to be white on the accent fill either way.
                 icon: Icon(Icons.edit, size: 20.w, color: AppColors.onPrimary),
                 label: Text(
-                  S.t('customize'),
+                  // Your own post is edited; someone else's is customized.
+                  S.t(s.userId != null && s.userId == SupabaseService.userId
+                      ? 'edit'
+                      : 'customize'),
                   style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600),
                 ),
                 style: ElevatedButton.styleFrom(

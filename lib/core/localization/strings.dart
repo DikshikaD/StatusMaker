@@ -49,7 +49,7 @@ class S {
 
   // [english, hindi]
   static const Map<String, List<String>> _m = {
-    'app_name': ['Status Artist', 'स्टेटस आर्टिस्ट'],
+    'app_name': ['Status Maker', 'स्टेटस मेकर'],
 
     // bottom nav
     'nav_home': ['Home', 'होम'],
@@ -160,6 +160,12 @@ class S {
     'rate_us': ['Rate us', 'हमें रेट करें'],
     'privacy_policy': ['Privacy Policy', 'गोपनीयता नीति'],
     'terms_conditions': ['Terms & Conditions', 'नियम और शर्तें'],
+    'terms_gate_title': ['Before you post', 'पोस्ट करने से पहले'],
+    'terms_gate_body': [
+      'Posts are public. Don\'t post anything sexual, hateful, violent, illegal or that you don\'t have the rights to. Posts that break the rules are removed, and anyone can report them.',
+      'पोस्ट सार्वजनिक होती हैं। कुछ भी अश्लील, नफ़रत भरा, हिंसक, ग़ैरक़ानूनी या जिस पर आपका अधिकार न हो, पोस्ट न करें। नियम तोड़ने वाली पोस्ट हटा दी जाती हैं, और कोई भी उनकी रिपोर्ट कर सकता है।'
+    ],
+    'terms_gate_agree': ['I agree', 'मैं सहमत हूँ'],
     'share_app': ['Share app', 'ऐप शेयर करें'],
     'share_app_msg': [
       'Create beautiful statuses with Status Maker — get the app:',
@@ -175,7 +181,6 @@ class S {
     'discover_more': ['Discover More', 'और खोजें'],
     'filter': ['Filter', 'फ़िल्टर'],
     'search_hint': ['Search templates...', 'टेम्पलेट खोजें...'],
-    'more_soon': ['More options coming soon', 'और विकल्प जल्द आ रहे हैं'],
     'filters_soon': ['Filters coming soon', 'फ़िल्टर जल्द आ रहे हैं'],
     'no_results_title': ['No matches found', 'कोई नतीजा नहीं मिला'],
     'no_results_msg': [
