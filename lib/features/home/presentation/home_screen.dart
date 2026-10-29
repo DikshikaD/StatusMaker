@@ -228,7 +228,12 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.auto_awesome, color: AppColors.accent, size: 20.w),
+            // The launcher icon's mark, so the header matches the home-screen icon.
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6.w),
+              child: Image.asset('assets/images/app_logo.png',
+                  width: 24.w, height: 24.w),
+            ),
             SizedBox(width: 8.w),
             Text(S.t('app_name')),
           ],
