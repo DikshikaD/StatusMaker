@@ -1,0 +1,1 @@
+First release of Status Maker: create, save, post and share beautiful Hindi and English statuses.
