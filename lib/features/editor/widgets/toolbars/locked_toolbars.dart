@@ -6,13 +6,15 @@ import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/utils/sheet_coordinator.dart';
 import 'package:status_maker/features/editor/widgets/bottom_sheets/font_sheet.dart';
 
-/// Toolbars for the LOCKED template editor. They deliberately expose only the
+/// Toolbars for the template editor. They deliberately expose only the
 /// controls that cannot change a design's composition:
 ///
-///  • text — the words, font, colour, bold, italic. NOT size, alignment or
-///    letter/line spacing: every slot sits at a fixed position with a fixed
-///    line allowance, and those four are the only properties that would change
-///    how much room the text needs and so push the design out of shape.
+///  • text — the words, font, colour, bold, italic, and resetting a dragged
+///    slot to its authored position. NOT size, alignment or letter/line
+///    spacing: every slot has a fixed width and line allowance, and those four
+///    are the only properties that would change how much room the text needs
+///    and so push the design out of shape. (Position is changed by dragging
+///    the text on the canvas — it moves the slot without resizing it.)
 ///  • photo — which picture, how it's cropped inside its frame, and the frame
 ///    border. NOT the shape, which would resize the slot's box.
 ///
@@ -133,16 +135,24 @@ const List<Color> _kTextColors = [
 /// Contextual toolbar for a selected text slot in a locked design.
 class LockedTextToolbar extends StatefulWidget {
   final TextObject text;
-  final ValueChanged<TextObject> onChanged;
+  /// Receives a field-level edit, applied by the owner to the text as it is
+  /// when the edit lands (see [EditorController.patchText]) — never a whole
+  /// replacement object built from this toolbar's possibly stale snapshot.
+  final ValueChanged<TextPatch> onChanged;
 
   /// Opens the words editor for this slot.
   final VoidCallback onEdit;
+
+  /// Moves the slot back to where the design places it. Null (tool hidden)
+  /// while the slot is still at its authored position.
+  final VoidCallback? onResetPosition;
 
   const LockedTextToolbar({
     super.key,
     required this.text,
     required this.onChanged,
     required this.onEdit,
+    this.onResetPosition,
   });
 
   @override
@@ -160,7 +170,7 @@ class _LockedTextToolbarState extends State<LockedTextToolbar> {
       context,
       builder: (_) => FontSheet(
         currentFont: _t.fontFamily,
-        onSelect: (font) => widget.onChanged(_t.copyWith(fontFamily: font)),
+        onSelect: (font) => widget.onChanged((t) => t.copyWith(fontFamily: font)),
       ),
     );
   }
@@ -207,7 +217,7 @@ class _LockedTextToolbarState extends State<LockedTextToolbar> {
             _Tool(
               label: S.t('bold'),
               active: _t.bold,
-              onTap: () => widget.onChanged(_t.copyWith(bold: !_t.bold)),
+              onTap: () => widget.onChanged((t) => t.copyWith(bold: !t.bold)),
               childBuilder: (c) => Text(
                 'B',
                 style: TextStyle(
@@ -217,7 +227,7 @@ class _LockedTextToolbarState extends State<LockedTextToolbar> {
             _Tool(
               label: S.t('italic'),
               active: _t.italic,
-              onTap: () => widget.onChanged(_t.copyWith(italic: !_t.italic)),
+              onTap: () => widget.onChanged((t) => t.copyWith(italic: !t.italic)),
               childBuilder: (c) => Text(
                 'I',
                 style: TextStyle(
@@ -228,6 +238,14 @@ class _LockedTextToolbarState extends State<LockedTextToolbar> {
                 ),
               ),
             ),
+            if (widget.onResetPosition != null)
+              _Tool(
+                label: S.t('reset_position'),
+                active: false,
+                onTap: widget.onResetPosition!,
+                childBuilder: (c) =>
+                    Icon(Icons.restart_alt_rounded, color: c, size: 22.w),
+              ),
           ],
         ),
       ),
@@ -245,7 +263,7 @@ class _LockedTextToolbarState extends State<LockedTextToolbar> {
           final color = _kTextColors[i];
           final selected = color == _t.color;
           return GestureDetector(
-            onTap: () => widget.onChanged(_t.copyWith(color: color)),
+            onTap: () => widget.onChanged((t) => t.copyWith(color: color)),
             child: Container(
               width: 36.w,
               height: 36.h,

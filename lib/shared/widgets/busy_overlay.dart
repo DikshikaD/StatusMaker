@@ -20,7 +20,14 @@ class BusyOverlay extends StatelessWidget {
     // so the CircularProgressIndicator only exists while it's needed. A spinner
     // left in the tree keeps its repeating animation running, which schedules a
     // frame forever and drags the whole app down for something invisible.
-    return IgnorePointer(
+    //
+    // While busy it absorbs touches (still with no scrim): the canvas used to
+    // stay fully editable during an upload, so a text dragged or recoloured
+    // mid-Post wasn't in the image being published, yet the editor then
+    // marked itself saved and that edit was silently lost. Idle, it lets every
+    // touch through as before.
+    return AbsorbPointer(
+      absorbing: busy,
       child: Center(
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 160),

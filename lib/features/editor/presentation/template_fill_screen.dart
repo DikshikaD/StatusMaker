@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -19,7 +19,9 @@ import 'package:status_maker/features/moderation/terms_gate.dart';
 import 'package:status_maker/studio/models/category_model.dart';
 import 'package:status_maker/features/editor/widgets/fixed_template_canvas.dart';
 import 'package:status_maker/features/editor/widgets/toolbars/locked_toolbars.dart';
+import 'package:status_maker/features/statuses/data/export_encoder.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
+import 'package:status_maker/shared/widgets/confirm_dialog.dart';
 import 'package:status_maker/shared/utils/native_share.dart';
 import 'package:status_maker/shared/widgets/busy_overlay.dart';
 import 'package:status_maker/shared/widgets/share_target_dialog.dart';
@@ -32,10 +34,14 @@ import 'package:status_maker/studio/presentation/studio_quote_sheet.dart';
 import 'package:status_maker/studio/quotes/quote_repository.dart';
 import 'package:status_maker/studio/templates/background_swap.dart';
 
-/// The LOCKED editor for a [FixedTemplate]. The design (positions, fonts,
-/// colors, decorations) can't be changed — the user can only:
-///  • tap any text to change its words
+/// The template editor for a [FixedTemplate]. The composition (slot widths,
+/// line allowances, sizes, decorations) is kept — the user can:
+///  • tap any text to change its words, font, colour, bold / italic
+///  • drag any text to a new position (and reset it to the design's own)
 ///  • add / replace / adjust the photo in the template's fixed slot
+///
+/// Every template opens at its authored layout; moves only ever change a
+/// text's `position`, are saved with the design and are what gets exported.
 class TemplateFillScreen extends StatefulWidget {
   final FixedTemplate template;
 
@@ -309,11 +315,41 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   /// Applies a style change from the text toolbar. Only properties that can't
   /// change the slot's footprint reach here (font, colour, bold, italic) — see
   /// [LockedTextToolbar].
-  void _updateTextStyle(TextObject updated) {
-    _edit(() {
-      final i = _texts.indexWhere((e) => e.id == updated.id);
-      if (i != -1) _texts[i] = updated;
-    });
+  ///
+  /// The toolbar sends a patch, applied to the slot as it is now, rather than
+  /// a replacement object built from its last snapshot — so a style tap can
+  /// never undo a move or word edit that landed since the toolbar was built
+  /// (and vice versa). A no-op patch doesn't mark the design dirty.
+  void _patchText(String id, TextPatch patch) {
+    final i = _texts.indexWhere((e) => e.id == id);
+    if (i == -1) return;
+    final next = patch(_texts[i]);
+    if (sameTextObject(next, _texts[i])) return;
+    _edit(() => _texts[i] = next);
+  }
+
+  // ---- text position ----------------------------------------------------------
+  /// Live drag of a text slot. Called every drag frame with the new top-left
+  /// position in the template's 360×640 design space — the same space the
+  /// canvas is exported from, so what you see is where it lands in the image.
+  void _moveText(String id, Offset position) {
+    final i = _texts.indexWhere((e) => e.id == id);
+    if (i == -1 || _texts[i].position == position) return;
+    _edit(() => _texts[i] = _texts[i].copyWith(position: position));
+  }
+
+  /// Where the template itself puts [id], or null for a slot it doesn't have.
+  Offset? _authoredPosition(String id) {
+    for (final t in _t.texts) {
+      if (t.id == id) return t.position;
+    }
+    return null;
+  }
+
+  /// Puts a moved slot back exactly where the design has it.
+  void _resetTextPosition(String id) {
+    final home = _authoredPosition(id);
+    if (home != null) _moveText(id, home);
   }
 
   // ---- photo (fixed slot only) ----------------------------------------------
@@ -402,7 +438,10 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
   /// the canvas to export mode (placeholders hidden), and wait for a frame
   /// with that state to actually be painted before rasterising. The editor's
   /// placeholders come back straight afterwards.
-  Future<Uint8List?> _capture() async {
+  ///
+  /// Returns the raw image (caller disposes it) — see the free editor's
+  /// `_capture` for why Save/Post never PNG-encode it.
+  Future<ui.Image?> _capture() async {
     setState(() {
       _selectedId = null;
       _exportMode = true;
@@ -411,7 +450,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
       await WidgetsBinding.instance.endOfFrame;
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return null;
-      return await captureCanvas(_canvasKey);
+      return await captureCanvasImage(_canvasKey);
     } finally {
       if (mounted) setState(() => _exportMode = false);
     }
@@ -452,12 +491,18 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     _exporting = true;
     setState(() => _busy = true);
     try {
-      final bytes = await _capture();
-      if (bytes == null) return;
-      await NativeShare.shareImage(
-        path: await writeTempPng(bytes),
-        target: target,
-      );
+      final image = await _capture();
+      if (image == null) return;
+      try {
+        final bytes = await encodePng(image);
+        if (bytes == null) return;
+        await NativeShare.shareImage(
+          path: await writeTempPng(bytes),
+          target: target,
+        );
+      } finally {
+        image.dispose();
+      }
     } catch (e) {
       debugPrint('share failed: $e');
       _fail(S.t('share_failed'));
@@ -473,38 +518,59 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final bytes = await _capture();
-      if (bytes == null) return;
-      final ok = await _cloudSave(bytes: bytes, makePublic: false);
+      final ok = await _captureAndSave(makePublic: false);
       if (ok) AppNav.goToMyCreations();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  /// Post makes it public, so it goes to the Home feed it just landed on.
+  /// True from the first tap on Post until that attempt finishes — including
+  /// the terms and "Share this post?" dialogs, before [_busy] is set — so
+  /// rapid taps can't stack two dialogs or start two uploads.
+  bool _postInFlight = false;
+
   Future<void> _onPost() async {
+    if (_postInFlight) return;
+    _postInFlight = true;
+    try {
+      await _post();
+    } finally {
+      _postInFlight = false;
+    }
+  }
+
+  /// Post makes it public, so it goes to the Home feed it just landed on.
+  Future<void> _post() async {
     if (_busy) return;
     // Play UGC policy: the community terms must be accepted before anything
     // is published. Asked before the busy state / upload starts.
     if (!await TermsGate.ensureAccepted(context)) return;
     if (!mounted || _busy) return;
+    // Last stop before it goes public. Cancel returns to the editor with
+    // nothing changed; the loader only appears after "Share Now".
+    if (!await showSharePostDialog(context)) return;
+    if (!mounted || _busy) return;
     setState(() => _busy = true);
     try {
-      final bytes = await _capture();
-      if (bytes == null) return;
-      final ok = await _cloudSave(bytes: bytes, makePublic: true);
+      final ok = await _captureAndSave(makePublic: true);
       if (ok) AppNav.goToHome();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  /// Returns whether the design actually reached the backend, so the caller
-  /// only navigates away on success.
-  Future<bool> _cloudSave(
-      {required Uint8List bytes, required bool makePublic}) async {
+  /// Captures the canvas and persists it. Returns whether the design actually
+  /// reached the backend, so the caller only navigates away on success; on
+  /// failure the edits stay on screen for a retry.
+  Future<bool> _captureAndSave({required bool makePublic}) async {
+    ui.Image? image = await _capture();
+    if (image == null) return false;
     try {
+      final encoded = await ExportEncoder.encode(image);
+      // Release the multi-MB capture before the (slow) network part.
+      image.dispose();
+      image = null;
       // Don't persist an unfilled "Add photo" frame into the saved design.
       final design = _currentDesign();
       final cleaned = StatusDesign(
@@ -524,7 +590,7 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
       );
       final saved = await _repo.saveDesign(
         design: cleaned,
-        thumbnailBytes: bytes,
+        image: encoded,
         title: _deriveTitle(),
         category: _feedCategory,
         makePublic: makePublic,
@@ -535,9 +601,12 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
       _dirty = false;
       _ok(makePublic ? S.t('posted_public') : S.t('saved_cloud'));
       return true;
-    } catch (_) {
-      _fail(S.t('something_wrong'));
+    } catch (e) {
+      debugPrint('cloud save failed: $e');
+      _fail(makePublic ? S.t('post_failed') : S.t('something_wrong'));
       return false;
+    } finally {
+      image?.dispose(); // only still set if encoding failed
     }
   }
 
@@ -631,6 +700,8 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
                               selectedId: _selectedId,
                               onTextTap: (t) => _select(t.id),
                               onTextDoubleTap: _editWords,
+                              onTextMoveStart: (t) => _select(t.id),
+                              onTextMove: (t, p) => _moveText(t.id, p),
                               onPhotoTap: _onPhotoTap,
                               onBackgroundTap: () => _select(null),
                             ),
@@ -720,7 +791,12 @@ class _TemplateFillScreenState extends State<TemplateFillScreen> {
       key = 'text';
       child = LockedTextToolbar(
         text: txt,
-        onChanged: _updateTextStyle,
+        onChanged: (patch) => _patchText(txt.id, patch),
+        // Offered only once the slot has actually been moved.
+        onResetPosition: _authoredPosition(txt.id) != null &&
+                _authoredPosition(txt.id) != txt.position
+            ? () => _resetTextPosition(txt.id)
+            : null,
         onEdit: () => _editWords(txt),
       );
     } else if (img != null) {

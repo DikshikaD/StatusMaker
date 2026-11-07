@@ -3,6 +3,7 @@ import 'package:status_maker/features/editor/controller/editor_controller.dart';
 import 'package:status_maker/features/editor/data/template_motif.dart';
 import 'package:status_maker/features/editor/utils/canvas_image.dart';
 import 'package:status_maker/features/editor/widgets/motif_painter.dart';
+import 'package:status_maker/studio/renderers/background_thumbnail_cache.dart';
 import 'package:status_maker/studio/renderers/generated_background.dart';
 
 /// Renders the status background: a generated studio recipe, a gallery image,
@@ -12,7 +13,25 @@ class TemplateBackground extends StatelessWidget {
   final BackgroundState state;
   final VoidCallback onTap;
 
-  const TemplateBackground({super.key, required this.state, required this.onTap});
+  /// Draw a generated background from a cached bitmap instead of painting its
+  /// shader layers live. For grids/rows of preview cards only: every card that
+  /// shares a recipe shares one raster, rendered once off the build path, and
+  /// a card scrolling back into view costs a blit rather than 3–4 full-rect
+  /// shader passes. The editor and the export keep painting live, so they stay
+  /// crisp at any resolution.
+  final bool useCachedRaster;
+
+  const TemplateBackground({
+    super.key,
+    required this.state,
+    required this.onTap,
+    this.useCachedRaster = false,
+  });
+
+  /// Raster size for [useCachedRaster] — the design space itself, which is
+  /// already more pixels than a two-column grid card shows on a phone.
+  static const int _rasterWidth = 360;
+  static const int _rasterHeight = 640;
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +39,13 @@ class TemplateBackground extends StatelessWidget {
     if (state.isGenerated) {
       // Procedural studio background — painted live (and re-evaluated at
       // export resolution), see GeneratedBackground.
-      bg = GeneratedBackground(config: state.generated!);
+      bg = useCachedRaster
+          ? BackgroundThumb(
+              config: state.generated!,
+              width: _rasterWidth,
+              height: _rasterHeight,
+            )
+          : GeneratedBackground(config: state.generated!);
     } else if (state.isAsset) {
       bg = Image.asset(
         state.assetPath!,

@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,7 +12,9 @@ import 'package:status_maker/features/editor/data/status_design.dart';
 import 'package:status_maker/features/editor/data/templates_data.dart';
 import 'package:status_maker/features/editor/utils/editor_export.dart';
 import 'package:status_maker/features/editor/utils/sheet_coordinator.dart';
+import 'package:status_maker/features/statuses/data/export_encoder.dart';
 import 'package:status_maker/features/statuses/data/status_repository.dart';
+import 'package:status_maker/shared/widgets/confirm_dialog.dart';
 import 'package:status_maker/shared/utils/native_share.dart';
 import 'package:status_maker/shared/widgets/busy_overlay.dart';
 import 'package:status_maker/shared/widgets/share_target_dialog.dart';
@@ -358,7 +360,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   }
 
   /// Deselect, wait a frame so no selection handles are baked in, then
-  /// rasterise the canvas to PNG bytes.
+  /// rasterise the canvas. Returns the raw image (caller disposes it): Share
+  /// encodes it as PNG, Save/Post hand the pixels straight to the upload
+  /// encoder so no PNG is ever encoded on that path.
   ///
   /// Two frames are awaited, not one. Rasterising at 3x and PNG-encoding it
   /// costs long enough to drop frames, so the busy overlay is given a frame of
@@ -368,14 +372,14 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
   ///
   /// The canvas is switched to export mode for the capture (placeholders
   /// hidden) and restored afterwards, so the editor keeps showing them.
-  Future<Uint8List?> _capture() async {
+  Future<ui.Image?> _capture() async {
     _controller.clearSelection();
     setState(() => _exportMode = true);
     try {
       await WidgetsBinding.instance.endOfFrame;
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted) return null;
-      return await captureCanvas(_canvasKey);
+      return await captureCanvasImage(_canvasKey);
     } finally {
       if (mounted) setState(() => _exportMode = false);
     }
@@ -415,12 +419,18 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     _exporting = true;
     setState(() => _busy = true);
     try {
-      final bytes = await _capture();
-      if (bytes == null) return;
-      await NativeShare.shareImage(
-        path: await writeTempPng(bytes),
-        target: target,
-      );
+      final image = await _capture();
+      if (image == null) return;
+      try {
+        final bytes = await encodePng(image);
+        if (bytes == null) return;
+        await NativeShare.shareImage(
+          path: await writeTempPng(bytes),
+          target: target,
+        );
+      } finally {
+        image.dispose();
+      }
     } catch (e) {
       debugPrint('share failed: $e');
       _fail(S.t('share_failed'));
@@ -437,10 +447,8 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final bytes = await _capture();
-      if (bytes == null) return;
       // Persist the editable design to the cloud (private).
-      final ok = await _cloudSave(bytes: bytes, makePublic: false);
+      final ok = await _captureAndSave(makePublic: false);
       // Drop the loader before navigating, so the editor slides away clean
       // instead of carrying a spinner off-screen with it.
       if (mounted) setState(() => _busy = false);
@@ -450,9 +458,24 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     }
   }
 
+  /// True from the first tap on Post until that attempt finishes — including
+  /// the terms and "Share this post?" dialogs, before [_busy] is set — so
+  /// rapid taps can't stack two confirmation dialogs or start two uploads.
+  bool _postInFlight = false;
+
+  Future<void> _onPost() async {
+    if (_postInFlight) return;
+    _postInFlight = true;
+    try {
+      await _post();
+    } finally {
+      _postInFlight = false;
+    }
+  }
+
   /// Post = store the design publicly, then close the editor and show the Home
   /// feed it was posted to.
-  Future<void> _onPost() async {
+  Future<void> _post() async {
     if (_busy) return;
     // Belt and braces: the pill is already disabled in this state, but nothing
     // else may publish an unchanged copy of someone else's status either.
@@ -464,11 +487,13 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     // anything is published. Asked before the busy state / upload starts.
     if (!await TermsGate.ensureAccepted(context)) return;
     if (!mounted || _busy) return;
+    // Last stop before it goes public. Cancel leaves the editor exactly as
+    // it was; the loader only appears once the user has confirmed.
+    if (!await showSharePostDialog(context)) return;
+    if (!mounted || _busy) return;
     setState(() => _busy = true);
     try {
-      final bytes = await _capture();
-      if (bytes == null) return;
-      final ok = await _cloudSave(bytes: bytes, makePublic: true);
+      final ok = await _captureAndSave(makePublic: true);
       // Drop the loader before navigating — see _onSave.
       if (mounted) setState(() => _busy = false);
       if (ok) AppNav.goToHome();
@@ -509,16 +534,25 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
     if (mounted) Navigator.of(context).pop();
   }
 
-  /// Returns whether the design actually reached the backend, so the caller
-  /// only navigates away on success.
-  Future<bool> _cloudSave(
-      {required Uint8List bytes, required bool makePublic}) async {
+  /// Captures the canvas and persists it. Returns whether the design actually
+  /// reached the backend, so the caller only navigates away on success. On
+  /// failure nothing in the editor changes — the user can simply retry, and
+  /// the repository reuses whatever already uploaded.
+  Future<bool> _captureAndSave({required bool makePublic}) async {
+    ui.Image? image = await _capture();
+    if (image == null) return false;
     try {
+      // Snapshot the design right after the capture so the stored JSON is
+      // exactly what was rasterised.
       final design =
           StatusDesign.fromController(_controller, canvasSize: _measureCanvas());
+      final encoded = await ExportEncoder.encode(image);
+      // Release the multi-MB capture before the (slow) network part.
+      image.dispose();
+      image = null;
       final saved = await _repo.saveDesign(
         design: design,
-        thumbnailBytes: bytes,
+        image: encoded,
         title: _deriveTitle(),
         // Normalised to a Home chip key — the feed filters on exact equality,
         // so 'Morning' / 'Suprabhat' would otherwise never show under a chip.
@@ -533,10 +567,13 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
       _controller.markSaved();
       _ok(makePublic ? S.t('posted_public') : S.t('saved_cloud'));
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('cloud save failed: $e');
       // Never surface raw backend errors to users — keep it friendly.
-      _fail(S.t('something_wrong'));
+      _fail(makePublic ? S.t('post_failed') : S.t('something_wrong'));
       return false;
+    } finally {
+      image?.dispose(); // only still set if encoding failed
     }
   }
 
@@ -777,7 +814,9 @@ class _StatusPersonalizerScreenState extends State<StatusPersonalizerScreen> {
           key = 'text';
           child = TextToolbar(
             text: txt,
-            onChanged: _controller.updateText,
+            // Field-level patch against the live model, keyed by id — see
+            // EditorController.patchText for why not a whole replacement.
+            onChanged: (patch) => _controller.patchText(txt.id, patch),
           );
         } else if (img != null) {
           key = 'image';

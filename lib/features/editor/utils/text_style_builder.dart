@@ -91,15 +91,30 @@ bool containsDevanagari(String text) {
 // the object actually being edited ever produces a new key. Capped so
 // dragging a slider (which mints a new fontSize every frame) can't grow this
 // unbounded.
-final Map<String, TextStyle> _styleCache = <String, TextStyle>{};
+//
+// Keyed by a record of the exact field values (the [Color] object itself,
+// which has value equality and a stable hashCode) rather than an interpolated
+// string: the key can never collide or depend on how a type happens to print
+// itself, and building it doesn't format seven values into a string for every
+// text on every rebuild. Using the Color directly (not toARGB32(), which only
+// exists on Flutter 3.29+) keeps this compiling on the project's SDK.
+typedef _StyleKey = (String, Color, double, bool, bool, double, double);
+final Map<_StyleKey, TextStyle> _styleCache = <_StyleKey, TextStyle>{};
 const int _styleCacheCap = 200;
 
 /// Single source of truth for turning a [TextObject]'s style fields into a
 /// [TextStyle]. Used by both the on-canvas text and the inline editor so they
 /// always match pixel-for-pixel.
 TextStyle buildTextStyle(TextObject t) {
-  final key =
-      '${t.fontFamily}|${t.color.toString()}|${t.fontSize}|${t.bold}|${t.italic}|${t.letterSpacing}|${t.lineHeight}';
+  final _StyleKey key = (
+    t.fontFamily,
+    t.color,
+    t.fontSize,
+    t.bold,
+    t.italic,
+    t.letterSpacing,
+    t.lineHeight,
+  );
   final cached = _styleCache[key];
   if (cached != null) return cached;
 

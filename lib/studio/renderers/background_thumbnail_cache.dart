@@ -11,13 +11,21 @@ import 'package:status_maker/studio/shaders/studio_shaders.dart';
 ///
 /// A sheet showing forty background tiles must not run forty shader passes
 /// per scroll frame on a budget phone. Each recipe is painted *once* into a
-/// `ui.Image` at tile size and reused; the LRU cap keeps memory bounded
-/// (~180 KB per 180×320 RGBA tile → ~8 MB at the cap).
+/// `ui.Image` at tile size and reused.
+///
+/// The LRU is bounded by decoded bytes, not entry count: the same cache serves
+/// 180×320 picker tiles (~230 KB) and full 360×640 template-card backgrounds
+/// (~920 KB), and a count cap sized for the small tiles would let the large
+/// ones grow several times past it.
 class BackgroundThumbnails {
   BackgroundThumbnails._();
 
-  static const int _cap = 48;
+  /// ~32 MB of RGBA — e.g. ~34 card backgrounds or ~140 picker tiles.
+  static const int _maxBytes = 32 * 1024 * 1024;
+  static int _bytes = 0;
   static final LinkedHashMap<String, ui.Image> _cache = LinkedHashMap();
+
+  static int _sizeOf(ui.Image i) => i.width * i.height * 4;
   static final Map<String, Future<ui.Image>> _pending = {};
 
   static String _key(BackgroundConfig c, int w, int h) =>
@@ -49,8 +57,12 @@ class BackgroundThumbnails {
         final image = await picture.toImage(width, height);
         picture.dispose();
         _cache[k] = image;
-        while (_cache.length > _cap) {
-          _cache.remove(_cache.keys.first)?.dispose();
+        _bytes += _sizeOf(image);
+        // Always keep the newest entry, even if it alone exceeds the budget.
+        while (_bytes > _maxBytes && _cache.length > 1) {
+          final evicted = _cache.remove(_cache.keys.first)!;
+          _bytes -= _sizeOf(evicted);
+          evicted.dispose();
         }
         return image;
       } finally {
@@ -65,6 +77,7 @@ class BackgroundThumbnails {
       img.dispose();
     }
     _cache.clear();
+    _bytes = 0;
   }
 }
 

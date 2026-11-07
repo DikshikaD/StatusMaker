@@ -22,16 +22,35 @@ int exportCacheWidth(double boxWidth, [double scale = 1.0]) {
   return (boxWidth * kExportPixelRatio * s).round().clamp(1, kMaxDecodeWidth);
 }
 
+/// Rasterises whatever is inside the RepaintBoundary marked by [key] into a
+/// `ui.Image`, without encoding it. The caller owns the image and must
+/// `dispose()` it.
+///
+/// Kept separate from [captureCanvas] so Save/Post can hand the raw pixels to
+/// the upload encoder (see `ExportEncoder`) instead of paying for a PNG encode
+/// here and a PNG decode on the native side just to re-encode it.
+Future<ui.Image?> captureCanvasImage(GlobalKey key,
+    {double pixelRatio = kExportPixelRatio}) async {
+  final obj = key.currentContext?.findRenderObject();
+  if (obj is! RenderRepaintBoundary) return null;
+  return obj.toImage(pixelRatio: pixelRatio);
+}
+
+/// PNG bytes for [image] (lossless — what the Share flow hands to other apps).
+/// Does not dispose [image].
+Future<Uint8List?> encodePng(ui.Image image) async {
+  final data = await image.toByteData(format: ui.ImageByteFormat.png);
+  return data?.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+}
+
 /// Rasterises whatever is inside the RepaintBoundary marked by [key] to PNG
 /// bytes. Deselect first so no selection frame is baked into the export.
 Future<Uint8List?> captureCanvas(GlobalKey key,
     {double pixelRatio = kExportPixelRatio}) async {
-  final obj = key.currentContext?.findRenderObject();
-  if (obj is! RenderRepaintBoundary) return null;
-  final image = await obj.toImage(pixelRatio: pixelRatio);
+  final image = await captureCanvasImage(key, pixelRatio: pixelRatio);
+  if (image == null) return null;
   try {
-    final data = await image.toByteData(format: ui.ImageByteFormat.png);
-    return data?.buffer.asUint8List();
+    return await encodePng(image);
   } finally {
     // ui.Image holds native memory that GC only reclaims non-deterministically
     // — at 3x a canvas export is several MB, so repeated saves in one session

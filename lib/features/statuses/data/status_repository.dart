@@ -4,12 +4,12 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:status_maker/core/supabase/supabase_config.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
 import 'package:status_maker/features/editor/data/status_design.dart';
+import 'package:status_maker/features/statuses/data/export_encoder.dart';
 import 'package:status_maker/features/statuses/data/saved_status.dart';
 
 /// Why the last read failed, so screens can say something more useful than
@@ -38,6 +38,30 @@ String uniqueStorageName(String ext) {
       .map((b) => b.toRadixString(16).padLeft(2, '0'))
       .join();
   return '${DateTime.now().microsecondsSinceEpoch}_$rnd.$ext';
+}
+
+/// A random (v4) UUID for a new `statuses` row, generated on the client so a
+/// retried insert is idempotent — see [StatusRepository.saveDesign].
+@visibleForTesting
+String newStatusId() {
+  final b = List<int>.generate(16, (_) => _secureRandom.nextInt(256));
+  b[6] = (b[6] & 0x0f) | 0x40; // version 4
+  b[8] = (b[8] & 0x3f) | 0x80; // RFC 4122 variant
+  final h = b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
+  return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-'
+      '${h.substring(16, 20)}-${h.substring(20)}';
+}
+
+/// 64-bit FNV-1a of [bytes] plus their length — identifies an encoded export
+/// so a retry can reuse an upload that already succeeded.
+@visibleForTesting
+String contentKey(Uint8List bytes) {
+  var h = -3750763034362895579; // FNV offset basis 0xcbf29ce484222325 as signed 64-bit
+  for (final b in bytes) {
+    h ^= b;
+    h *= 0x100000001b3;
+  }
+  return '${bytes.length}:${h.toRadixString(16)}';
 }
 
 /// All reads/writes for the `statuses` table + the two storage buckets live
@@ -72,6 +96,31 @@ class StatusRepository {
   static const _likesTable = 'likes';
   static const _assetsBucket = 'status-assets';
   static const _thumbsBucket = 'thumbnails';
+
+  /// Upper bound on a single storage upload. Uploads used to have no bound at
+  /// all, so a stalled connection left the Post spinner up indefinitely; now
+  /// the user gets an error and keeps their design to retry.
+  static const Duration uploadTimeout = Duration(seconds: 60);
+
+  /// Upper bound on the row insert/update.
+  static const Duration writeTimeout = Duration(seconds: 20);
+
+  // ---- retry state (one repository per editor screen) ----------------------
+  // A failed Post/Save leaves the user in the editor to try again. Without
+  // these, every retry re-uploaded every photo and the full image, and an
+  // insert that actually committed before its response was lost (timeout,
+  // dropped connection) was inserted a second time — a duplicate post.
+
+  /// Local photo path -> public URL, for photos already uploaded.
+  final Map<String, String> _uploadedAssets = {};
+
+  /// [contentKey] of an encoded image -> public URL.
+  final Map<String, String> _uploadedExports = {};
+
+  /// Client-generated id for the row this screen is about to insert. Reused
+  /// by every retry until one succeeds, so a retry after a lost response finds
+  /// the row already there (unique violation) and updates it instead.
+  String? _pendingInsertId;
 
   SupabaseClient get _db => SupabaseService.client;
 
@@ -148,12 +197,16 @@ class StatusRepository {
   // Save / Post
   // ---------------------------------------------------------------------------
 
-  /// Persists [design] + [thumbnailBytes]. When [existingId] is supplied the
-  /// same row is updated (so tapping Save then Post doesn't create duplicates).
-  /// [makePublic] sets is_public — false for a private Save, true for Post.
+  /// Persists [design] + its rendered [image]. When [existingId] is supplied
+  /// the same row is updated (so tapping Save then Post doesn't create
+  /// duplicates). [makePublic] sets is_public — false for a private Save, true
+  /// for Post.
+  ///
+  /// The photo uploads, the full image and the preview are independent, so
+  /// they run concurrently; only the row write waits for all of them.
   Future<SavedStatus> saveDesign({
     required StatusDesign design,
-    required Uint8List thumbnailBytes,
+    required EncodedExport image,
     String? title,
     String? category,
     bool makePublic = false,
@@ -164,17 +217,27 @@ class StatusRepository {
     final uid = SupabaseService.userId!;
 
     // (2) Portable design: push local photos to storage, swap in public URLs.
-    final designJson = design.toJson();
-    await _uploadEmbeddedImages(designJson, uid);
-
     // (3) Images: the full export (detail view, Share) and a small WebP
     // preview for the feed. Without a preview (encoder unavailable) the feed
     // falls back to the full image, as it did before.
-    final imageUrl = await _uploadThumbnail(thumbnailBytes, uid, 'png');
-    final preview = await _encodePreview(thumbnailBytes);
-    final thumbUrl = preview == null
-        ? imageUrl
-        : await _uploadThumbnail(preview, uid, 'webp');
+    final designJson = design.toJson();
+    final String imageUrl;
+    final String? previewUrl;
+    try {
+      final results = await Future.wait<String?>([
+        _uploadEmbeddedImages(designJson, uid).then((_) => null),
+        _uploadExport(image.full, uid, image.fullExt, image.fullMime),
+        if (image.preview != null)
+          _uploadExport(image.preview!, uid, 'webp', 'image/webp'),
+      ]);
+      imageUrl = results[1]!;
+      previewUrl = image.preview != null ? results[2] : null;
+    } catch (e) {
+      debugPrint('StatusRepository.saveDesign upload failed: $e');
+      throw StatusRepositoryException(
+          'Couldn\'t upload. Check your internet and try again.');
+    }
+    final thumbUrl = previewUrl ?? imageUrl;
 
     // (4/5) Insert or update the row.
     final payload = <String, dynamic>{
@@ -193,10 +256,37 @@ class StatusRepository {
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     };
 
-    Future<Map<String, dynamic>> write(Map<String, dynamic> p) =>
-        existingId != null
-            ? _db.from(_table).update(p).eq('id', existingId).select().single()
-            : _db.from(_table).insert(p).select().single();
+    // A new row gets its id here, once, and keeps it across retries.
+    final insertId =
+        existingId == null ? (_pendingInsertId ??= newStatusId()) : null;
+    if (insertId != null) payload['id'] = insertId;
+
+    Future<Map<String, dynamic>> update(Map<String, dynamic> p, String id) =>
+        _db.from(_table).update(p).eq('id', id).select().single();
+
+    Future<Map<String, dynamic>> write(Map<String, dynamic> p) async {
+      if (existingId != null) {
+        return update(p, existingId).timeout(writeTimeout);
+      }
+      try {
+        return await _db
+            .from(_table)
+            .insert(p)
+            .select()
+            .single()
+            .timeout(writeTimeout);
+      } on PostgrestException catch (e) {
+        // 23505 = unique violation on our own pre-generated id: an earlier
+        // attempt's insert committed but its response never arrived. Finish
+        // the job as an update of that row rather than failing (or, as before
+        // client ids, inserting a duplicate post).
+        if (e.code != '23505') rethrow;
+        final retry = Map<String, dynamic>.of(p)
+          ..remove('id')
+          ..remove('remix_of'); // pinned after insert by a trigger anyway
+        return update(retry, insertId!).timeout(writeTimeout);
+      }
+    }
 
     try {
       Map<String, dynamic> row;
@@ -212,6 +302,7 @@ class StatusRepository {
           ..['thumb_url'] = imageUrl;
         row = await write(payload);
       }
+      _pendingInsertId = null; // the row exists now; callers pass existingId
       return SavedStatus.fromRow(row);
     } catch (e) {
       debugPrint('StatusRepository.saveDesign failed: $e');
@@ -466,37 +557,30 @@ class StatusRepository {
   /// CDN may cache them for a year. (The default was one hour.)
   static const _immutable = '31536000';
 
-  Future<String> _uploadThumbnail(Uint8List bytes, String uid, String ext) async {
+  /// Uploads an encoded status image to the user's thumbnails folder and
+  /// returns its public URL. Reuses the URL of an identical image this
+  /// repository already uploaded (a retry after a failed row write).
+  Future<String> _uploadExport(
+      Uint8List bytes, String uid, String ext, String mime) async {
+    final key = contentKey(bytes);
+    final hit = _uploadedExports[key];
+    if (hit != null) return hit;
     final path = '$uid/${_uniqueName(ext)}';
-    await _db.storage.from(_thumbsBucket).uploadBinary(
+    await _db.storage
+        .from(_thumbsBucket)
+        .uploadBinary(
           path,
           bytes,
           fileOptions: FileOptions(
-            contentType: 'image/$ext',
+            contentType: mime,
             cacheControl: _immutable,
             upsert: true,
           ),
-        );
-    return _db.storage.from(_thumbsBucket).getPublicUrl(path);
-  }
-
-  static const MethodChannel _native =
-      MethodChannel('status_maker/native_share');
-
-  /// ~540 px lossy WebP of the export, made by MainActivity.encodePreview.
-  /// Null when unavailable (non-Android, or the encoder failed).
-  static Future<Uint8List?> _encodePreview(Uint8List png) async {
-    if (!Platform.isAndroid) return null;
-    try {
-      return await _native.invokeMethod<Uint8List>('encodePreview', {
-        'bytes': png,
-        'maxWidth': 540,
-        'quality': 80,
-      });
-    } catch (e) {
-      debugPrint('StatusRepository preview encode failed: $e');
-      return null;
-    }
+        )
+        .timeout(uploadTimeout);
+    final url = _db.storage.from(_thumbsBucket).getPublicUrl(path);
+    _uploadedExports[key] = url;
+    return url;
   }
 
   /// Walks the design JSON, uploads every embedded *local* photo to
@@ -505,22 +589,27 @@ class StatusRepository {
   /// if one image fails to upload we keep its original path rather than abort.
   Future<void> _uploadEmbeddedImages(
       Map<String, dynamic> design, String uid) async {
+    // Every photo uploads concurrently; each rewrites only its own map entry.
+    final jobs = <Future<void>>[];
+    void upload(Map node, String key) {
+      final local = node[key] as String?;
+      if (!_isLocalFile(local)) return;
+      jobs.add(_tryUpload(local!, uid).then((url) {
+        if (url != null) node[key] = url;
+      }));
+    }
+
     // Background photo.
     final bg = design['background'];
-    if (bg is Map && _isLocalFile(bg['imagePath'] as String?)) {
-      final url = await _tryUpload(bg['imagePath'] as String, uid);
-      if (url != null) bg['imagePath'] = url;
-    }
+    if (bg is Map) upload(bg, 'imagePath');
     // Floating photos.
     final images = design['images'];
     if (images is List) {
       for (final img in images) {
-        if (img is Map && _isLocalFile(img['path'] as String?)) {
-          final url = await _tryUpload(img['path'] as String, uid);
-          if (url != null) img['path'] = url;
-        }
+        if (img is Map) upload(img, 'path');
       }
     }
+    await Future.wait(jobs);
   }
 
   bool _isLocalFile(String? p) {
@@ -561,6 +650,10 @@ class StatusRepository {
   }
 
   Future<String?> _tryUpload(String filePath, String uid) async {
+    // Already uploaded by an earlier attempt from this editor: same file,
+    // same URL — don't send the bytes again.
+    final hit = _uploadedAssets[filePath];
+    if (hit != null) return hit;
     try {
       final bytes = await File(filePath).readAsBytes();
       // Paths in a design come from its JSON — and a remix starts from someone
@@ -585,8 +678,11 @@ class StatusRepository {
               cacheControl: _immutable,
               upsert: true,
             ),
-          );
-      return _db.storage.from(_assetsBucket).getPublicUrl(path);
+          )
+          .timeout(uploadTimeout);
+      final url = _db.storage.from(_assetsBucket).getPublicUrl(path);
+      _uploadedAssets[filePath] = url;
+      return url;
     } catch (e) {
       debugPrint('StatusRepository image upload skipped ($filePath): $e');
       return null;

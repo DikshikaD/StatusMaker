@@ -222,6 +222,30 @@ class TextObject {
   }
 }
 
+/// A field-level edit to a [TextObject], applied to whatever the object is at
+/// the moment the edit lands — see [EditorController.patchText].
+typedef TextPatch = TextObject Function(TextObject current);
+
+/// Value comparison of every field that affects how a text renders or where it
+/// sits. [TextObject] is a mutable class without `==`, so this is spelled out.
+bool sameTextObject(TextObject a, TextObject b) =>
+    a.id == b.id &&
+    a.text == b.text &&
+    a.fontFamily == b.fontFamily &&
+    a.color == b.color &&
+    a.fontSize == b.fontSize &&
+    a.textAlign == b.textAlign &&
+    a.bold == b.bold &&
+    a.italic == b.italic &&
+    a.letterSpacing == b.letterSpacing &&
+    a.lineHeight == b.lineHeight &&
+    a.highlight == b.highlight &&
+    a.position == b.position &&
+    a.scale == b.scale &&
+    a.rotation == b.rotation &&
+    a.boxWidth == b.boxWidth &&
+    a.zIndex == b.zIndex;
+
 /// Decorative vector elements (stickers) the user can drop on the canvas.
 /// All are drawn in code by [ElementPainter] — no image assets needed, and
 /// (unlike emoji) every sticker recolors to match whatever the user picks in
@@ -905,6 +929,31 @@ class EditorController extends ChangeNotifier {
       _textsView = null;
       notifyListeners();
     }
+  }
+
+  /// Applies a style edit to the text object as it is RIGHT NOW in the model.
+  ///
+  /// Toolbars used to hand back a whole replacement object built from the
+  /// snapshot they were last built with (`widget.text.copyWith(color: …)`),
+  /// which [updateText] then wrote over the model. Any write that landed in
+  /// between — the inline editor committing its words on pointer-down, a drag
+  /// committing its position, a bring-to-front zIndex bump — was silently
+  /// reverted, and the toolbar's own edit could be overwritten the same way by
+  /// the next stale snapshot. Patching the current object makes every style
+  /// edit a field-level change that can neither lose nor be lost to another.
+  ///
+  /// A patch that changes nothing is ignored, so tapping the already-selected
+  /// colour doesn't add an undo step or mark the design dirty.
+  void patchText(String id, TextPatch patch) {
+    final i = _texts.indexWhere((e) => e.id == id);
+    if (i == -1) return;
+    final current = _texts[i];
+    final next = patch(current);
+    if (identical(next, current) || sameTextObject(next, current)) return;
+    _checkpoint();
+    _texts[i] = next;
+    _textsView = null;
+    notifyListeners();
   }
 
   void updateTextContent(String id, String text) {

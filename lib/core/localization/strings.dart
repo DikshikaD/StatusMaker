@@ -457,8 +457,21 @@ class S {
     // it fits every design's name line.
     'name_placeholder': ['— Your Name', '— आपका नाम'],
     'locked_select_hint': [
-      'Tap the text or photo to change it — the layout stays fixed',
-      'बदलने के लिए टेक्स्ट या फ़ोटो पर टैप करें — लेआउट फ़िक्स्ड रहेगा'
+      'Tap the text or photo to change it — drag text to move it',
+      'बदलने के लिए टेक्स्ट या फ़ोटो पर टैप करें — खिसकाने के लिए टेक्स्ट को खींचें'
+    ],
+    'reset_position': ['Reset', 'रीसेट'],
+
+    // public sharing confirmation (Post)
+    'share_post_title': ['Share this post?', 'यह पोस्ट शेयर करें?'],
+    'share_post_message': [
+      'Are you sure you want to share this? Your post will be visible to everyone.',
+      'क्या आप इसे शेयर करना चाहते हैं? आपकी पोस्ट सभी को दिखाई देगी।'
+    ],
+    'share_now': ['Share Now', 'अभी शेयर करें'],
+    'post_failed': [
+      'Couldn\'t post. Your design is still here — please try again.',
+      'पोस्ट नहीं हो सका। आपका डिज़ाइन सुरक्षित है — कृपया फिर से कोशिश करें।'
     ],
 
     // editor — background sheet

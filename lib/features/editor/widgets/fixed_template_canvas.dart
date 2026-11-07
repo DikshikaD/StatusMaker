@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/theme/app_colors.dart';
@@ -13,10 +15,15 @@ import 'package:status_maker/features/editor/widgets/frame_painter.dart';
 import 'package:status_maker/features/editor/widgets/photo_frame_painter.dart';
 import 'package:status_maker/features/editor/widgets/template_background.dart';
 
-/// Renders a [StatusDesign] with a completely LOCKED layout: every object is
-/// drawn exactly where the design says, with no drag / pinch / rotate / delete
-/// affordances at all. The only interactions are the optional tap callbacks
-/// (edit a text's words, fill or replace the photo slot).
+/// Renders a [StatusDesign] at its authored layout. Nothing can be resized,
+/// rotated or deleted here; the interactions are the optional tap callbacks
+/// (edit a text's words, fill or replace the photo slot) and — when
+/// [onTextMove] is supplied — dragging a text layer to a new position.
+///
+/// Moving is generic over every text layer of every design: it only changes
+/// the layer's `position` (in the same 360×640 design space the template is
+/// authored in and exported from), never its width, line allowance or style,
+/// so the slot keeps its footprint and the export matches the preview.
 ///
 /// Always lays out at [kFixedCanvasSize] and scales to fit whatever space it's
 /// given, so fixed-template coordinates render identically on every device —
@@ -33,6 +40,13 @@ class FixedTemplateCanvas extends StatelessWidget {
 
   /// Double-tapping a text jumps straight into editing its words.
   final void Function(TextObject t)? onTextDoubleTap;
+
+  /// Drag-to-move for text layers. All three are null for read-only previews.
+  /// [onTextMove] receives the new top-left position in design space (already
+  /// clamped so the text's centre stays on the canvas) on every drag frame.
+  final void Function(TextObject t)? onTextMoveStart;
+  final void Function(TextObject t, Offset position)? onTextMove;
+  final void Function(TextObject t)? onTextMoveEnd;
 
   /// Tapping empty canvas clears the selection.
   final VoidCallback? onBackgroundTap;
@@ -52,6 +66,11 @@ class FixedTemplateCanvas extends StatelessWidget {
   /// "— Your Name" hint in an empty name slot — are left out of the image.
   final bool exportMode;
 
+  /// A small, non-interactive grid/row card. Generated backgrounds are drawn
+  /// from a shared cached bitmap instead of running their shader passes live
+  /// for every card — see [TemplateBackground.useCachedRaster].
+  final bool preview;
+
   const FixedTemplateCanvas({
     super.key,
     required this.design,
@@ -59,7 +78,11 @@ class FixedTemplateCanvas extends StatelessWidget {
     this.onTextTap,
     this.onPhotoTap,
     this.onTextDoubleTap,
+    this.onTextMoveStart,
+    this.onTextMove,
+    this.onTextMoveEnd,
     this.onBackgroundTap,
+    this.preview = false,
     this.selectedId,
     this.lineLimits,
     this.exportMode = false,
@@ -92,12 +115,13 @@ class FixedTemplateCanvas extends StatelessWidget {
                 TemplateBackground(
                   state: design.background,
                   onTap: onBackgroundTap ?? () {},
+                  useCachedRaster: preview,
                 ),
                 ...design.elements.map(_element),
                 ...design.images
                     .where((i) => !(exportMode && _isEmptyImage(i)))
                     .map(_image),
-                ...design.texts.map(_text),
+                ..._orderedTexts().map(_text),
                 if (design.frame != StatusFrame.none)
                   Positioned.fill(
                     child: IgnorePointer(
@@ -118,6 +142,28 @@ class FixedTemplateCanvas extends StatelessWidget {
     );
   }
 
+  /// Text layers in paint order, with the selected one moved last so it paints
+  /// — and therefore hit-tests — on top of everything else, exactly like the
+  /// free editor brings a selected object to front. Without this, a slot the
+  /// user has dragged underneath another (the only way two slots overlap, since
+  /// every authored layout keeps its slots in separate bands) could be selected
+  /// through its one exposed sliver but never dragged, because the slot on top
+  /// of it would keep intercepting the gesture.
+  ///
+  /// Order is otherwise preserved, and each placed text carries a stable
+  /// [ValueKey] (see [_text]) so moving one to the end of the list reattaches
+  /// its [_MovableSlot] state rather than resetting a drag in progress.
+  List<TextObject> _orderedTexts() {
+    final id = selectedId;
+    if (id == null) return design.texts;
+    final i = design.texts.indexWhere((t) => t.id == id);
+    if (i == -1) return design.texts;
+    return [
+      ...design.texts.where((t) => t.id != id),
+      design.texts[i],
+    ];
+  }
+
   /// Places [child] exactly like the free editor's TransformableObject does
   /// (same 6px content padding, same center-pivoted scale/rotate), so a design
   /// saved from here reopens in the full editor in the very same spot.
@@ -126,9 +172,13 @@ class FixedTemplateCanvas extends StatelessWidget {
     required double scale,
     required double rotation,
     required Widget child,
+    Key? slotKey,
     bool selected = false,
     VoidCallback? onTap,
     VoidCallback? onDoubleTap,
+    VoidCallback? onMoveStart,
+    ValueChanged<Offset>? onMove,
+    VoidCallback? onMoveEnd,
   }) {
     // The outline sits in the object's own 6px padding ring, so it hugs the
     // content without changing its size or where it sits.
@@ -150,7 +200,19 @@ class FixedTemplateCanvas extends StatelessWidget {
           ),
       ],
     );
-    if (onTap != null || onDoubleTap != null) {
+    if (onMove != null) {
+      content = _MovableSlot(
+        position: position,
+        scale: scale,
+        rotation: rotation,
+        onTap: onTap,
+        onDoubleTap: onDoubleTap,
+        onMoveStart: onMoveStart,
+        onMove: onMove,
+        onMoveEnd: onMoveEnd,
+        child: content,
+      );
+    } else if (onTap != null || onDoubleTap != null) {
       content = GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
@@ -159,6 +221,7 @@ class FixedTemplateCanvas extends StatelessWidget {
       );
     }
     return Positioned(
+      key: slotKey,
       left: position.dx,
       top: position.dy,
       child: Transform.rotate(
@@ -170,12 +233,19 @@ class FixedTemplateCanvas extends StatelessWidget {
 
   Widget _text(TextObject t) {
     return _placed(
+      // Stable across the selected-last reorder in [_orderedTexts], so a slot
+      // moved to the top of the paint order keeps its _MovableSlot state and an
+      // in-progress drag isn't reset.
+      slotKey: ValueKey('txt_${t.id}'),
       position: t.position,
       scale: t.scale,
       rotation: t.rotation,
       selected: selectedId == t.id,
       onTap: onTextTap == null ? null : () => onTextTap!(t),
       onDoubleTap: onTextDoubleTap == null ? null : () => onTextDoubleTap!(t),
+      onMoveStart: onTextMoveStart == null ? null : () => onTextMoveStart!(t),
+      onMove: onTextMove == null ? null : (p) => onTextMove!(t, p),
+      onMoveEnd: onTextMoveEnd == null ? null : () => onTextMoveEnd!(t),
       // A fixed 300-wide block (not just a max) so `textAlign` centers the
       // words reliably no matter what the user types — including a short line
       // that would otherwise shrink-wrap and drift off the canvas's center
@@ -322,6 +392,103 @@ class FixedTemplateCanvas extends StatelessWidget {
                 ),
         ),
       ),
+    );
+  }
+}
+
+/// Tap / double-tap / one-finger drag for a placed object.
+///
+/// Lives INSIDE the object's `Transform.rotate ∘ Transform.scale` (like the
+/// free editor's TransformableObject), so the pointer delta arrives in the
+/// object's own unscaled, unrotated frame; it is mapped back into design
+/// space before being added to the position, otherwise a scaled or rotated
+/// text would drag at the wrong speed or at an angle to the finger. The
+/// enclosing FittedBox is undone automatically for the same reason.
+///
+/// The drag is accumulated against the position captured at drag start, so
+/// the owner rebuilding with the new position each frame can't feed back into
+/// the gesture.
+class _MovableSlot extends StatefulWidget {
+  final Offset position;
+  final double scale;
+  final double rotation;
+  final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
+  final VoidCallback? onMoveStart;
+  final ValueChanged<Offset> onMove;
+  final VoidCallback? onMoveEnd;
+  final Widget child;
+
+  const _MovableSlot({
+    required this.position,
+    required this.scale,
+    required this.rotation,
+    required this.onMove,
+    required this.child,
+    this.onTap,
+    this.onDoubleTap,
+    this.onMoveStart,
+    this.onMoveEnd,
+  });
+
+  @override
+  State<_MovableSlot> createState() => _MovableSlotState();
+}
+
+class _MovableSlotState extends State<_MovableSlot> {
+  /// How far inside the canvas edge the text's centre is kept, so a dragged
+  /// text can bleed off the edge but can always be grabbed back.
+  static const double _edgeMargin = 12;
+
+  Offset _start = Offset.zero;
+  Offset _accum = Offset.zero;
+  bool _dragging = false;
+
+  Offset _toDesignSpace(Offset local) {
+    final v = local * widget.scale;
+    final c = math.cos(widget.rotation);
+    final s = math.sin(widget.rotation);
+    return Offset(v.dx * c - v.dy * s, v.dx * s + v.dy * c);
+  }
+
+  Offset _clamp(Offset pos) {
+    final size = context.size ?? Size.zero;
+    final half = Offset(size.width / 2, size.height / 2);
+    final c = pos + half;
+    const w = kFixedCanvasSize;
+    return Offset(
+          c.dx.clamp(_edgeMargin, w.width - _edgeMargin),
+          c.dy.clamp(_edgeMargin, w.height - _edgeMargin),
+        ) -
+        half;
+  }
+
+  void _end() {
+    if (!_dragging) return;
+    _dragging = false;
+    widget.onMoveEnd?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      onDoubleTap: widget.onDoubleTap,
+      onPanStart: (_) {
+        _dragging = true;
+        _start = widget.position;
+        _accum = Offset.zero;
+        widget.onMoveStart?.call();
+      },
+      onPanUpdate: (d) {
+        if (!_dragging) return;
+        _accum += _toDesignSpace(d.delta);
+        widget.onMove(_clamp(_start + _accum));
+      },
+      onPanEnd: (_) => _end(),
+      onPanCancel: _end,
+      child: widget.child,
     );
   }
 }

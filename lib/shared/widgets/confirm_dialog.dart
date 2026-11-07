@@ -8,15 +8,25 @@ import 'package:status_maker/core/utils/responsive.dart';
 /// rounded corners, a circular icon badge, and the same fade + slide + scale
 /// entrance/exit transition.
 ///
-/// Returns `true` if the destructive action was confirmed, `false`/`null`
-/// otherwise (dismissed or Cancel tapped).
+/// Returns `true` if the action was confirmed, `false`/`null` otherwise
+/// (dismissed or Cancel tapped).
+///
+/// [accent] tints the icon badge and the confirm button. It defaults to the
+/// destructive red; non-destructive confirmations (e.g. publishing) pass the
+/// brand accent instead.
+///
+/// The dialog closes exactly once: a second tap on either button while the
+/// exit transition runs used to call `pop` again, which popped the screen
+/// underneath (e.g. the editor) along with the dialog.
 Future<bool?> showConfirmDialog(
   BuildContext context, {
   required String title,
   required String message,
   String? confirmLabel,
   IconData icon = Icons.delete_outline_rounded,
+  Color accent = Colors.redAccent,
 }) {
+  var closed = false;
   return showGeneralDialog<bool>(
     context: context,
     barrierDismissible: true,
@@ -24,6 +34,12 @@ Future<bool?> showConfirmDialog(
     barrierColor: AppColors.primary.withValues(alpha: 0.35),
     transitionDuration: const Duration(milliseconds: 250),
     pageBuilder: (dialogContext, _, __) {
+      void close(bool value) {
+        if (closed) return;
+        closed = true;
+        Navigator.of(dialogContext).pop(value);
+      }
+
       return Dialog(
         backgroundColor: AppColors.surface,
         insetPadding: EdgeInsets.symmetric(horizontal: 28.w),
@@ -32,7 +48,11 @@ Future<bool?> showConfirmDialog(
         ),
         // Scrollable so the Cancel/Confirm buttons stay reachable on short
         // screens and at large system font scales (matches ShareTargetDialog).
-        child: SingleChildScrollView(
+        // Width-capped so it stays a compact card on tablets and web instead
+        // of stretching edge to edge.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: SingleChildScrollView(
           padding: EdgeInsets.all(24.w),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -41,10 +61,10 @@ Future<bool?> showConfirmDialog(
                 width: 56.w,
                 height: 56.w,
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withValues(alpha: 0.12),
+                  color: accent.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: Colors.redAccent, size: 28.w),
+                child: Icon(icon, color: accent, size: 28.w),
               ),
               SizedBox(height: 16.h),
               Text(
@@ -70,7 +90,8 @@ Future<bool?> showConfirmDialog(
                 children: [
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => Navigator.of(dialogContext).pop(false),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => close(false),
                       child: Container(
                         height: 52.h,
                         alignment: Alignment.center,
@@ -93,12 +114,13 @@ Future<bool?> showConfirmDialog(
                   SizedBox(width: 12.w),
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => Navigator.of(dialogContext).pop(true),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => close(true),
                       child: Container(
                         height: 52.h,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: Colors.redAccent,
+                          color: accent,
                           borderRadius: BorderRadius.circular(28.r),
                         ),
                         child: Text(
@@ -116,6 +138,7 @@ Future<bool?> showConfirmDialog(
               ),
             ],
           ),
+        ),
         ),
       );
     },
@@ -140,4 +163,19 @@ Future<bool?> showConfirmDialog(
       );
     },
   );
+}
+
+/// Final check before a design is published to the public feed. Only Post
+/// uses this — a private Save or a Share to another app never goes public.
+/// Returns true only when the user explicitly chose "Share Now".
+Future<bool> showSharePostDialog(BuildContext context) async {
+  final ok = await showConfirmDialog(
+    context,
+    title: S.t('share_post_title'),
+    message: S.t('share_post_message'),
+    confirmLabel: S.t('share_now'),
+    icon: Icons.public_rounded,
+    accent: AppColors.accent,
+  );
+  return ok == true;
 }

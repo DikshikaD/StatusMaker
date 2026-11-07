@@ -156,6 +156,7 @@ class ReadyTemplatesSection extends StatelessWidget {
                       child: FixedTemplateCanvas(
                         design: template.previewDesign(),
                         lineLimits: template.lineLimits,
+                        preview: true,
                       ),
                     ),
                   ),

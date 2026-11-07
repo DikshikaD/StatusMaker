@@ -58,6 +58,7 @@ class StudioTemplateCard extends StatelessWidget {
                 child: FixedTemplateCanvas(
                   design: template.previewDesign(),
                   lineLimits: template.lineLimits,
+                  preview: true,
                 ),
               ),
             ),

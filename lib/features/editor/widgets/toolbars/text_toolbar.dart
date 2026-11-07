@@ -26,7 +26,10 @@ const List<Color> _kTextColors = [
 /// Contextual toolbar for the selected text. Light theme to match the app.
 class TextToolbar extends StatefulWidget {
   final TextObject text;
-  final ValueChanged<TextObject> onChanged;
+  /// Receives a field-level edit, applied by the owner to the text as it is
+  /// when the edit lands (see [EditorController.patchText]) — never a whole
+  /// replacement object built from this toolbar's possibly stale snapshot.
+  final ValueChanged<TextPatch> onChanged;
 
   const TextToolbar({super.key, required this.text, required this.onChanged});
 
@@ -88,7 +91,7 @@ class _TextToolbarState extends State<TextToolbar> {
           min: 12,
           max: 96,
           label: S.t('size'),
-          onChanged: (v) => widget.onChanged(_t.copyWith(fontSize: v)),
+          onChanged: (v) => widget.onChanged((t) => t.copyWith(fontSize: v)),
         );
       case _Panel.color:
         return _colorPanel();
@@ -100,7 +103,7 @@ class _TextToolbarState extends State<TextToolbar> {
           min: -2,
           max: 12,
           label: S.t('letter_spacing'),
-          onChanged: (v) => widget.onChanged(_t.copyWith(letterSpacing: v)),
+          onChanged: (v) => widget.onChanged((t) => t.copyWith(letterSpacing: v)),
         );
       case _Panel.line:
         return _slider(
@@ -108,7 +111,7 @@ class _TextToolbarState extends State<TextToolbar> {
           min: 1.0,
           max: 2.5,
           label: S.t('line_spacing'),
-          onChanged: (v) => widget.onChanged(_t.copyWith(lineHeight: v)),
+          onChanged: (v) => widget.onChanged((t) => t.copyWith(lineHeight: v)),
         );
       case _Panel.none:
         return const SizedBox.shrink();
@@ -126,7 +129,7 @@ class _TextToolbarState extends State<TextToolbar> {
           final font = kEditorFonts[i];
           final selected = font == _t.fontFamily;
           return GestureDetector(
-            onTap: () => widget.onChanged(_t.copyWith(fontFamily: font)),
+            onTap: () => widget.onChanged((t) => t.copyWith(fontFamily: font)),
             child: Container(
               alignment: Alignment.center,
               padding: EdgeInsets.symmetric(horizontal: 16.w),
@@ -160,7 +163,7 @@ class _TextToolbarState extends State<TextToolbar> {
           final color = _kTextColors[i];
           final selected = color == _t.color;
           return GestureDetector(
-            onTap: () => widget.onChanged(_t.copyWith(color: color)),
+            onTap: () => widget.onChanged((t) => t.copyWith(color: color)),
             child: Container(
               width: 36.w,
               height: 36.h,
@@ -183,7 +186,7 @@ class _TextToolbarState extends State<TextToolbar> {
     Widget btn(TextAlign a, IconData icon) {
       final selected = _t.textAlign == a;
       return GestureDetector(
-        onTap: () => widget.onChanged(_t.copyWith(textAlign: a)),
+        onTap: () => widget.onChanged((t) => t.copyWith(textAlign: a)),
         child: Container(
           width: 48.w,
           height: 40.h,
@@ -254,7 +257,7 @@ class _TextToolbarState extends State<TextToolbar> {
       context,
       builder: (_) => FontSheet(
         currentFont: _t.fontFamily,
-        onSelect: (font) => widget.onChanged(_t.copyWith(fontFamily: font)),
+        onSelect: (font) => widget.onChanged((t) => t.copyWith(fontFamily: font)),
       ),
     );
   }
@@ -292,7 +295,7 @@ class _TextToolbarState extends State<TextToolbar> {
           _tool(
             label: S.t('bold'),
             active: _t.bold,
-            onTap: () => widget.onChanged(_t.copyWith(bold: !_t.bold)),
+            onTap: () => widget.onChanged((t) => t.copyWith(bold: !t.bold)),
             childBuilder: (c) => Text('B',
                 style: TextStyle(
                     color: c, fontSize: 18.sp, fontWeight: FontWeight.w800)),
@@ -300,7 +303,7 @@ class _TextToolbarState extends State<TextToolbar> {
           _tool(
             label: S.t('italic'),
             active: _t.italic,
-            onTap: () => widget.onChanged(_t.copyWith(italic: !_t.italic)),
+            onTap: () => widget.onChanged((t) => t.copyWith(italic: !t.italic)),
             childBuilder: (c) => Text('I',
                 style: TextStyle(
                     color: c,

@@ -15,6 +15,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.nio.ByteBuffer
 
 /**
  * Adds targeted image sharing on top of the plain system chooser that
@@ -99,6 +100,30 @@ class MainActivity : FlutterActivity() {
                             }.start()
                         }
                     }
+                    "encodeExport" -> {
+                        val rgba = call.argument<ByteArray>("rgba")
+                        val width = call.argument<Int>("width")
+                        val height = call.argument<Int>("height")
+                        val quality = call.argument<Int>("quality") ?: 95
+                        val previewMaxWidth = call.argument<Int>("previewMaxWidth") ?: 540
+                        val previewQuality = call.argument<Int>("previewQuality") ?: 80
+                        if (rgba == null || width == null || height == null) {
+                            result.error("bad_args", "rgba, width and height are required", null)
+                        } else {
+                            // Off the main thread — two compressions of a
+                            // 1080x1920 bitmap. Throwable, not Exception, so an
+                            // OutOfMemoryError on a low-RAM phone degrades to the
+                            // Dart PNG fallback instead of crashing the app.
+                            Thread {
+                                val out = try {
+                                    encodeExport(rgba, width, height, quality, previewMaxWidth, previewQuality)
+                                } catch (e: Throwable) {
+                                    null
+                                }
+                                runOnUiThread { result.success(out) }
+                            }.start()
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -131,6 +156,57 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
+     * Encodes a raw capture (Flutter `ImageByteFormat.rawRgba`: RGBA byte
+     * order, premultiplied — exactly ARGB_8888's in-memory layout) into the
+     * full upload image (JPEG) and the feed preview (WebP) from ONE bitmap.
+     * Replaces PNG-encode-in-Dart + PNG-decode-here, the slowest part of
+     * posting. Returns null on any mismatch so Dart falls back to PNG.
+     */
+    private fun encodeExport(
+        rgba: ByteArray,
+        width: Int,
+        height: Int,
+        quality: Int,
+        previewMaxWidth: Int,
+        previewQuality: Int,
+    ): Map<String, ByteArray>? {
+        if (width <= 0 || height <= 0 || rgba.size < width * height * 4) return null
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        try {
+            bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(rgba, 0, width * height * 4))
+
+            val full = ByteArrayOutputStream(width * height / 4)
+            if (!bitmap.compress(Bitmap.CompressFormat.JPEG, quality, full)) return null
+
+            val scaled = if (width > previewMaxWidth) {
+                val h = (height.toLong() * previewMaxWidth / width).toInt()
+                Bitmap.createScaledBitmap(bitmap, previewMaxWidth, h, true)
+            } else {
+                bitmap
+            }
+            val preview = ByteArrayOutputStream()
+            val previewOk = scaled.compress(webpLossy(), previewQuality, preview)
+            if (scaled !== bitmap) scaled.recycle()
+
+            return if (previewOk) {
+                mapOf("full" to full.toByteArray(), "preview" to preview.toByteArray())
+            } else {
+                mapOf("full" to full.toByteArray())
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun webpLossy(): Bitmap.CompressFormat =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Bitmap.CompressFormat.WEBP_LOSSY
+        } else {
+            @Suppress("DEPRECATION")
+            Bitmap.CompressFormat.WEBP
+        }
+
+    /**
      * The logical target names ("whatsapp", …) that actually have an app
      * installed, so the sheet can hide tiles that would only fail.
      */
@@ -161,7 +237,13 @@ class MainActivity : FlutterActivity() {
         }
 
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/png"
+            // Posted statuses are stored as JPEG (see encodeExport); the editor's
+            // own Share still hands over a PNG. Declare whichever this file is.
+            type = when (file.extension.lowercase()) {
+                "jpg", "jpeg" -> "image/jpeg"
+                "webp" -> "image/webp"
+                else -> "image/png"
+            }
             setPackage(pkg)
             putExtra(Intent.EXTRA_STREAM, uri)
             if (!text.isNullOrEmpty()) putExtra(Intent.EXTRA_TEXT, text)

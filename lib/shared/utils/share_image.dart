@@ -5,6 +5,18 @@ import 'package:status_maker/shared/utils/share_dir.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:status_maker/shared/utils/native_share.dart';
 
+/// File extension to save a downloaded status image under, taken from the
+/// URL's path (`jpg`/`jpeg`/`webp`/`png`); anything else is treated as PNG,
+/// which is what every status was stored as before JPEG uploads.
+@visibleForTesting
+String shareExtensionFor(String url) {
+  final path = Uri.tryParse(url)?.path.toLowerCase() ?? '';
+  for (final ext in const ['jpg', 'jpeg', 'webp', 'png']) {
+    if (path.endsWith('.$ext')) return ext;
+  }
+  return 'png';
+}
+
 /// Downloads a remote image (e.g. a saved status thumbnail) to the cache dir
 /// and returns the file path, or null if it couldn't be fetched.
 ///
@@ -26,8 +38,10 @@ Future<String?> downloadImageToTemp(String url) async {
         .timeout(const Duration(seconds: 30));
 
     final dir = await shareDir();
-    final file = File(
-        '${dir.path}/share_${DateTime.now().millisecondsSinceEpoch}.png');
+    // Keep the source's real type: posted statuses are JPEG, older ones PNG.
+    // The share intent's MIME type is taken from this extension.
+    final file = File('${dir.path}/share_${DateTime.now().millisecondsSinceEpoch}'
+        '.${shareExtensionFor(url)}');
     await file.writeAsBytes(bytes);
     return file.path;
   } catch (e) {
