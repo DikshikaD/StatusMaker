@@ -98,10 +98,13 @@ providers processing on our behalf):
 | App activity → App interactions | Yes | Optional | App functionality |
 | App activity → Other user-generated content | Yes | Optional | App functionality, Fraud prevention, security, and compliance |
 | Device or other IDs | Yes | Required | App functionality (push notifications) |
+| App info and performance → Crash logs | Yes | Required | Analytics |
+| App info and performance → Diagnostics | Yes | Required | Analytics |
 
 Not collected: location, contacts, financial info, health, messages, audio,
-files and docs, calendar, web browsing, app info and performance, name, email,
-phone number.
+files and docs, calendar, web browsing, name, email, phone number.
+
+Crash logs and diagnostics come from Firebase Crashlytics (added in 1.0.2).
 
 ## 5. Release (Test and release)
 

@@ -23,6 +23,8 @@ plugins {
     // Reads android/app/google-services.json so Firebase Messaging knows which
     // Firebase project this app belongs to. The build fails without that file.
     id "com.google.gms.google-services" version "4.4.2" apply false
+    // Uploads the mapping info Crashlytics needs to show readable stack traces.
+    id "com.google.firebase.crashlytics" version "3.0.2" apply false
 }
 
 include ":app"

@@ -6,6 +6,8 @@ plugins {
     // Firebase Cloud Messaging (push notifications) — requires
     // android/app/google-services.json.
     id "com.google.gms.google-services"
+    // Firebase Crashlytics (crash reports in the Firebase console).
+    id "com.google.firebase.crashlytics"
 }
 
 // Release signing: reads android/key.properties (gitignored).

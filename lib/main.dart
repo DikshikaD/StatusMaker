@@ -7,6 +7,7 @@ import 'package:status_maker/core/theme/theme_controller.dart';
 import 'package:status_maker/core/utils/app_navigation.dart';
 import 'package:status_maker/core/utils/first_run.dart';
 import 'package:status_maker/core/utils/responsive.dart';
+import 'package:status_maker/core/crash/crash_reporting.dart';
 import 'package:status_maker/core/localization/strings.dart';
 import 'package:status_maker/core/notifications/push_service.dart';
 import 'package:status_maker/core/supabase/supabase_service.dart';
@@ -18,6 +19,8 @@ import 'package:status_maker/studio/shaders/studio_shaders.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // First, so a crash anywhere below (startup included) reaches Crashlytics.
+  await CrashReporting.init();
   // Portrait only. The editor canvas is a fixed 9:16 status; in landscape it
   // shrank to a ~190 px thumbnail (and the text on it vanished), leaving the
   // app unusable until the phone was turned back.
